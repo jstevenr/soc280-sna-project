@@ -1,0 +1,78 @@
+---
+title: "SOC 280 Final Project"
+author: "J Steven Raquel"
+date: "11/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(sna)
+library(igraph)
+library(epimdr)
+data(gonnet)
+```
+
+# Data Analysis
+
+```{r data-prep}
+# data is loaded as 'gonnet'
+nodes <- rownames(gonnet)
+colnames(gonnet) <- nodes
+
+gonnet_df <- data.frame(nodes) %>%
+  mutate(gender = ifelse(grepl("m", nodes), yes = "m", no = NA)) %>%
+  mutate(gender = ifelse(grepl("f", nodes), yes = "f", no = gender)) %>%
+  mutate(gender_lty = ifelse(gender == "m", yes = 4, no = 3)) %>%
+  mutate(gender_lty = ifelse(gender == "f", yes = 3, no = gender_lty)) %>%
+  mutate(gender_lty = ifelse(gender %in% c("m", "f"), yes = gender_lty, no = 50)
+         ) %>%
+  mutate(attended_bar = gonnet["b",] == 1) %>%
+  mutate(attended_bar_col = ifelse(attended_bar == T, "magenta", "grey"))
+```
+
+```{r sociogram}
+set.seed(10)
+gplot(gonnet, vertex.col = gonnet_df$attended_bar_col,
+      vertex.sides = gonnet_df$gender_lty,
+      # displaylabels = T, label.cex = 0.6, label.pos = 2,
+      boxed.labels = F, pad = 2, 
+      vertex.cex = 1.25)
+# legend for gender
+legend("topleft",
+       legend = c("yes", "no"),
+       col = c("magenta", "grey"),
+       fill = F, border = "white", pch = 19,
+       title = "Bar Attendance", bty = "n")
+legend("topright",
+       legend = c("m", "f"),
+       col = c("black"),
+       fill = F, border = "white", pch = c(0, 2),
+       title = "Gender", bty = "n")
+# legend for bar attendance
+title("Network of gonorrhea transfer, shaded by bar attendance")
+
+```
+
+
+```{r p-value-hierarchical-clustering}
+fit <- 
+  pvclust(gonnet, 
+  method.hclust = "single",
+  method.dist = "euclidean",
+  iseed = 10, # to get same results
+  parallel = T, # to use all but one CPU thread
+  nboot = 1000) # default 1000, using less for speed but possibly sacrificing accuracy
+
+```
+```{r plot-dendrogram}
+plot(fit)
+pvrect(fit, alpha = 0.95)
+```
+
+```{r }
+
+
+
+```
