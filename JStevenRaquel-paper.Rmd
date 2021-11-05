@@ -11,10 +11,28 @@ library(tidyverse)
 library(sna)
 library(igraph)
 library(epimdr)
+library(pvclust)
+library(CINNA)
 data(gonnet)
 ```
 
-# Data Analysis
+# Abstract
+
+# Introduction
+
+# Methods
+
+# Results
+
+## Data Analysis
+
+### Centrality
+
+### Network Density
+
+### K-cores
+
+### Community Detection
 
 ```{r data-prep}
 # data is loaded as 'gonnet'
@@ -29,12 +47,16 @@ gonnet_df <- data.frame(nodes) %>%
   mutate(gender_lty = ifelse(gender %in% c("m", "f"), yes = gender_lty, no = 50)
          ) %>%
   mutate(attended_bar = gonnet["b",] == 1) %>%
-  mutate(attended_bar_col = ifelse(attended_bar == T, "magenta", "grey"))
+  mutate(col = ifelse(attended_bar == T, "tomato1", "grey"))
+
+
+gonnet_df$col[!(gonnet_df$gender %in% c("m", "f"))] <- "blue"
+gonnet_df$col[gonnet_df$nodes == "b"] <- "orange"
 ```
 
 ```{r sociogram}
 set.seed(10)
-gplot(gonnet, vertex.col = gonnet_df$attended_bar_col,
+gplot(gonnet, vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
       # displaylabels = T, label.cex = 0.6, label.pos = 2,
       boxed.labels = F, pad = 2, 
@@ -42,7 +64,7 @@ gplot(gonnet, vertex.col = gonnet_df$attended_bar_col,
 # legend for gender
 legend("topleft",
        legend = c("yes", "no"),
-       col = c("magenta", "grey"),
+       col = c("tomato1", "grey"),
        fill = F, border = "white", pch = 19,
        title = "Bar Attendance", bty = "n")
 legend("topright",
@@ -55,24 +77,129 @@ title("Network of gonorrhea transfer, shaded by bar attendance")
 
 ```
 
+```{r centrality}
+cen <- get_centralities(gonnet, "undirected")
 
-```{r p-value-hierarchical-clustering}
+centrality_correlations(gonnet, cen)
+
+```
+```{r density-based clustering}
+par(mfrow = c(1,1))
+clust <- hclust(dist(gonnet), method = "complete")
+# clust <- equiv.clust(gonnet)
+
+plot(clust)
+bm_complete <- blockmodel(gonnet,
+                          ec = clust, k = 15)
+
+bmR_complete <- reorder_blockmodel(bm_complete)
+# overall network density, which we will use for alpha
+alpha <- bmR_complete$block.model %>% mean(na.rm = T)
+paste0("The mean overall network density is ", round(alpha, 3), ".")
+
+density_matrix <- bmR_complete$block.model
+# plotting blockmodel 
+gplot(density_matrix > alpha,
+      diag = T,
+      vertex.cex = 1.5,
+      label = unique(bmR_complete$block.membership),
+      # boxed.labels=F,
+      vertex.col="grey",
+      pad = 1.25)
+title("Block sociogram")
+
+```
+
+
+
+```{r p-value-hierarchical-clustering, cache = T}
 fit <- 
   pvclust(gonnet, 
   method.hclust = "single",
   method.dist = "euclidean",
   iseed = 10, # to get same results
   parallel = T, # to use all but one CPU thread
-  nboot = 1000) # default 1000, using less for speed but possibly sacrificing accuracy
-
+  nboot = 1000) 
 ```
 ```{r plot-dendrogram}
+par(mfrow = c(1,1))
 plot(fit)
 pvrect(fit, alpha = 0.95)
 ```
 
-```{r }
+```{r blockmodel}
+set.seed(10)
+# if pchisq > 0.05, cluster is significant
+pp <- pvpick(fit)
+# number of significant clusters
+ideal_k <- pp$clusters %>% length()
+
+
+# blockmodel using k = 58 and cutting trees at 0.5
+bm_complete <- blockmodel(gonnet,
+                          ec = fit$hclust,
+                          k = ideal_k+9, mode = "digraph")
+
+bmR_complete <- reorder_blockmodel(bm_complete)
+# overall network density, which we will use for alpha
+alpha <- bmR_complete$block.model %>% mean(na.rm = T)
+paste0("The mean overall network density is ", round(alpha, 3), ".")
+
+density_matrix <- bmR_complete$block.model
+
+par(mfrow = c(1,2))
+# original plot, again
+gplot(gonnet, vertex.col = gonnet_df$col,
+      vertex.sides = gonnet_df$gender_lty,
+      # displaylabels = T, label.cex = 0.6, label.pos = 2,
+      boxed.labels = F, pad = 2, 
+      vertex.cex = 1.25)
+# legend for gender
+legend("topleft",
+       legend = c("yes", "no"),
+       col = c("tomato1", "grey"),
+       fill = F, border = "white", pch = 19,
+       title = "Bar Attendance", bty = "n")
+legend("topright",
+       legend = c("m", "f"),
+       col = c("black"),
+       fill = F, border = "white", pch = c(0, 2),
+       title = "Gender", bty = "n")
+# legend for bar attendance
+title("Network of gonorrhea transfer")
+
+# plotting blockmodel 
+gplot(density_matrix > alpha,
+      diag = T,
+      vertex.cex = 1.5,
+      # label = unique(bmR_complete$block.membership),
+      # boxed.labels=F,
+      vertex.col="grey",
+      pad = 1.25)
+title("Block sociogram")
+
+```
 
 
 
+```{r plotting-fast-greedy-community}
+set.seed(10)
+plot_fastgreedy_cd(gonnet)
+```
+
+
+```{r centralities}
+gonnet_ig <- graph_from_adjacency_matrix(gonnet)
+pc <- proper_centralities(gonnet_ig)
+
+calculate_centralities(gonnet_ig, 
+                       include = pc[c(1, 4, 11, 16, 27, 
+                                      45, 8, 18, 31, 43, 3, 19)]) %>% 
+  pca_centralities()
+
+```
+
+```{r kcores}
+edgelist <- as.edgelist(gonnet, n = dim(gonnet)[1])
+plot_kcores(edgelist, sym = T, mode = "digraph")
 ```
