@@ -51,12 +51,14 @@ gonnet_df <- data.frame(nodes) %>%
 
 
 gonnet_df$col[!(gonnet_df$gender %in% c("m", "f"))] <- "blue"
-gonnet_df$col[gonnet_df$nodes == "b"] <- "orange"
+gonnet_df$col[gonnet_df$nodes == "b"] <- "tomato1"
 ```
 
 ```{r sociogram}
+par(mfrow = c(1,1))
 set.seed(10)
-gplot(gonnet, vertex.col = gonnet_df$col,
+org_coord <- 
+  gplot(gonnet, vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
       # displaylabels = T, label.cex = 0.6, label.pos = 2,
       boxed.labels = F, pad = 2, 
@@ -73,16 +75,146 @@ legend("topright",
        fill = F, border = "white", pch = c(0, 2),
        title = "Gender", bty = "n")
 # legend for bar attendance
-title("Network of gonorrhea transfer, shaded by bar attendance")
+title("Gonorrhea network, shaded by bar attendance")
 
 ```
 
 ```{r centrality}
-cen <- get_centralities(gonnet, "undirected")
+cen <- get_centralities(gonnet, "directed")
 
+# correlations between centrality measures
 centrality_correlations(gonnet, cen)
 
+# creating igraph object
+gonnet_ig <- graph_from_adjacency_matrix(gonnet)
+
+pc <- proper_centralities(gonnet_ig)
+
+centralities <- calculate_centralities(gonnet_ig, 
+                       include = pc[c(1, 4, 11, 16, 27, 
+                                      45, 8, 18, 31, 43, 3, 19)])
+
+# plot of different centralities' contributions via PCA
+pca_centralities(centralities)
+
 ```
+
+```{r male-female-outdegree}
+gonnet_df2 <- cbind(gonnet_df, cen) %>% select(-id)
+
+outdegree_gender <- gonnet_df2 %>% 
+  select(nodes, gender, outdegree) %>% 
+  drop_na()
+
+# average outdegree overall
+mean(outdegree_gender$outdegree)
+
+# average outdegree among men
+outdegree_male <- 
+  outdegree_gender %>% 
+  filter(gender == "m") %>% 
+  select(nodes, outdegree)
+outdegree_male$outdegree %>% mean()
+
+# male outdegree that excludes nodes with zero outdegree
+outdegree_male_dropzero <- 
+  outdegree_male %>%
+  filter(outdegree != 0)
+outdegree_male_dropzero$outdegree %>% mean()
+
+# average outdegree among females
+outdegree_female <- 
+  outdegree_gender %>%
+  filter(gender == "f") %>% 
+  select(nodes, outdegree) 
+outdegree_female$outdegree %>% mean()
+
+outdegree_female_dropzero <-
+  outdegree_female %>%
+  filter(outdegree != 0)
+outdegree_female_dropzero$outdegree %>% mean()
+
+# Student's t-test comparing the mean outdegree of men and women
+t.test(x = outdegree_male$outdegree, 
+       y = outdegree_female$outdegree,
+       var.equal = TRUE)
+```
+
+```{r bar-attendance-outdegree}
+outdegree_bar <- gonnet_df2 %>%
+  select(nodes, attended_bar, outdegree)
+
+# average outdegree among bar attendees
+outdegree_bar %>% 
+  filter(attended_bar == TRUE) %>%
+  select(outdegree) %>% unlist() %>% mean()
+
+# average outdegree among non-bar attendees
+outdegree_bar %>% 
+  filter(attended_bar == FALSE) %>%
+  select(outdegree) %>% unlist() %>% mean()
+
+
+```
+
+
+```{r simulations}
+# simulating similar networks and determining whether than outdegree is statistically significant
+mc_sim(gonnet, n = 1000, alpha = 0.05, "three-cycle")
+
+```
+
+
+```{r gplot-outdegree}
+# normalizing the outdegree of bar because of course it has a high outdegree
+outdegree_m <- cen$outdegree + 1
+outdegree_m[1] <- 1
+
+set.seed(10)
+gplot(gonnet, 
+      vertex.col = gonnet_df$col,
+      vertex.sides = gonnet_df$gender_lty,
+      vertex.cex = outdegree_m,
+      coord = org_coord)
+# legend for gender
+legend("topleft",
+       legend = c("yes", "no"),
+       col = c("tomato1", "grey"),
+       fill = F, border = "white", pch = 19,
+       title = "Bar Attendance", bty = "n")
+legend("topright",
+       legend = c("m", "f"),
+       col = c("black"),
+       fill = F, border = "white", pch = c(0, 2),
+       title = "Gender", bty = "n")
+title("Gonorrhea network, sized by outdegree")
+```
+
+
+## Principal Component Analysis
+
+```{r gplot- centralities}
+# extracting the centralities that were important based on the PCA
+centrality_eigen <- centralities$`eigenvector centralities`
+centrality_load <- centralities$`Load Centrality`
+centrality_degree <- centralities$`Degree Centrality`
+centrality_geodesic <- centralities$`Geodesic K-Path Centrality`
+centrality_shortest <- centralities$`Shortest-Paths Betweenness Centrality`
+```
+
+```{r gplot-size-eigenvector-centrality}
+set.seed(10)
+gplot(gonnet, vertex.col = gonnet_df$col,
+      vertex.sides = gonnet_df$gender_lty,
+      vertex.cex = centrality_degree,
+      # displaylabels = T, label.cex = 0.6, label.pos = 2,
+      boxed.labels = F, pad = 2)
+
+
+
+```
+
+
 ```{r density-based clustering}
 par(mfrow = c(1,1))
 clust <- hclust(dist(gonnet), method = "complete")
@@ -175,7 +307,9 @@ gplot(density_matrix > alpha,
       # label = unique(bmR_complete$block.membership),
       # boxed.labels=F,
       vertex.col="grey",
-      pad = 1.25)
+      pad = 1.25, 
+      # coord = org_coord
+      )
 title("Block sociogram")
 
 ```
@@ -183,21 +317,32 @@ title("Block sociogram")
 
 
 ```{r plotting-fast-greedy-community}
+par(mfrow = c(1,1))
 set.seed(10)
-plot_fastgreedy_cd(gonnet)
+par(mfrow = c(1,2))
+# original plot, again
+org_coord <- gplot(gonnet, vertex.col = gonnet_df$col,
+      vertex.sides = gonnet_df$gender_lty,
+      # displaylabels = T, label.cex = 0.6, label.pos = 2,
+      boxed.labels = F, pad = 2, 
+      vertex.cex = 1.25)
+# legend for gender
+legend("topleft",
+       legend = c("yes", "no"),
+       col = c("tomato1", "grey"),
+       fill = F, border = "white", pch = 19,
+       title = "Bar Attendance", bty = "n")
+legend("topright",
+       legend = c("m", "f"),
+       col = c("black"),
+       fill = F, border = "white", pch = c(0, 2),
+       title = "Gender", bty = "n")
+
+# fast and greedy community detection
+plot_fastgreedy_cd(gonnet, layout = org_coord, legend = F)
+# labeling only the original bar patrons
 ```
 
-
-```{r centralities}
-gonnet_ig <- graph_from_adjacency_matrix(gonnet)
-pc <- proper_centralities(gonnet_ig)
-
-calculate_centralities(gonnet_ig, 
-                       include = pc[c(1, 4, 11, 16, 27, 
-                                      45, 8, 18, 31, 43, 3, 19)]) %>% 
-  pca_centralities()
-
-```
 
 ```{r kcores}
 edgelist <- as.edgelist(gonnet, n = dim(gonnet)[1])
