@@ -213,9 +213,9 @@ get_centralities <- function(matrix, cmode = "directed") {
   
   require(sna)
   
-  outdegree <- degree(matrix, cmode = "outdegree")
-  indegree <- degree(matrix, cmode = "indegree") 
-  betweenness <- betweenness(matrix, cmode) # directed
+  outdegree <- sna::degree(matrix, cmode = "outdegree")
+  indegree <- sna::degree(matrix, cmode = "indegree") 
+  betweenness <- sna::betweenness(matrix, cmode) # directed
   eigenvectors <- eigen(matrix)
   # The vector corresponding to the biggest eigenvalue is the 1st column
   eig <- as.numeric(eigenvectors$vectors[,1])
@@ -242,4 +242,140 @@ centrality_correlations <- function(matrix, centralities) {
   }
   
   return(cormat)
+}
+
+
+mc_sim <- function(sociomatrix, n, alpha = 0.05, test) {
+  
+  require(sna)
+  require(ggplot2)
+  # monte carlo simulation
+  # assumes directed graph
+  # creating n graphs of the same dimensions of the input sociomatrix
+  # and the same number of edges
+  # message("Generating ", n, " networks of size ", sum(sociomatrix), "...")
+  
+  sim <- rgnm(n, nv = dim(sociomatrix)[1], m = sum(sociomatrix))
+  
+  if (test == "mutuality") {
+    # message("Testing observed level of mutuality...")
+    
+    # census of observed network
+    dyad_census <- sna::dyad.census(sociomatrix)
+    # observed mutual ties in the network
+    mut_obs <- dyad_census[1] 
+    cat("The observed number of mutual ties is ", mut_obs, ".\n", sep = "")
+    # census of simulated networks
+    sim_dyad_census <- sna::dyad.census(sim)
+    # vector of simulated mutual ties, length n
+    mut_sim <- sim_dyad_census[,1] 
+    
+    # count of mutual ties is our test statistic
+    # message("Plotting the distribution of the simulations vs the observed value...")
+    df <- data.frame(network = 1:n, mutual_ties = mut_sim)
+    plot <- ggplot(df, aes(x = mutual_ties)) + 
+      geom_histogram(aes(y = ..density..),
+                     binwidth = 1,
+                     fill = "black",
+                     colour = "black",
+                     alpha = 0.25) + 
+      geom_density(fill = "black", colour = "black", alpha = 0.25) + 
+      geom_vline(xintercept = mut_obs, lty = 2, col = "red",
+                 show.legend = T) + 
+      ggtitle("Distribution of n simulations for # of mutual ties") + 
+      ylab("Density of the curve") + 
+      xlab("Mutual ties")
+    
+    # p-value
+    # 1 - proportion of networks with more observed mutual times than simulated
+    p <- 1 - (sum(mut_obs > mut_sim) / n)
+    
+  } # end of if statement
+  
+  else if (test == "transitivity") {
+    # message("Testing observed level of transitivity...")
+    
+    trans_obs <- gtrans(sociomatrix)
+    cat("The observed clustering coefficient of the sociomatrix is ", trans_obs,
+        ".\n",
+        sep = "")
+    trans_sim <- gtrans(sim)
+    
+    # message("Plotting the distribution of the simulations vs the observed value...")
+    df <- data.frame(network = 1:n, transitivity = trans_sim)
+    plot <- ggplot(df, aes(x = transitivity)) +
+      geom_density(fill = "black", colour = "black", alpha = 0.25) + 
+      geom_vline(xintercept = trans_obs, lty = 2, col = "red",
+                 show.legend = T) + 
+      ggtitle("Distribution of n simulations for transitivity (clustering coefficient)") +
+      ylab("Density of the curve") + 
+      xlab("Transivity")
+    
+    # p-value
+    # 1 - proportion of networks with higher transitivity index than simulated
+    p <- 1 - (sum(trans_obs > trans_sim) / n)
+    
+    
+    
+  } # end of else if 
+  
+  else if (test == "three-cycle") {
+    # message("Testing observed number of three-cycles...")
+    
+    # observed cycle census
+    cycle_census <- kcycle.census(sociomatrix, maxlen = 3)
+    # number of 3-cycles
+    three_cycle_obs <- cycle_census$cycle.count["3","Agg"]
+    cat("The observed number of three-cycles is ", three_cycle_obs, 
+        ".\n",
+        sep = "")
+    # cycle census of simulated networks
+    sim_cycle_census <- kcycle.census(sim, maxlen = 3)
+    # initializing empty vector of counts of 3 cycles
+    three_cycle_sim <- c()
+    # collecting all 3-cycle counts
+    for (i in 1:n) {
+      three_cycle_sim[i] <- sim_cycle_census[[i]]$cycle.count["3", "Agg"]
+    }
+    
+    # message("Plotting the distribution of the simulations vs the observed value...")
+    # data frame of count of three-cycles by network
+    df <- data.frame(network = 1:n, three_cycles = three_cycle_sim)
+    # plotting histogram and density curve of simulated three-cycle amounts
+    plot <- ggplot(df, aes(x = three_cycles)) + 
+      # adding histogram
+      geom_histogram(aes(y = ..density..),
+                     binwidth = 1, 
+                     fill = "black",
+                     colour = "black",
+                     alpha = 0.25) + 
+      # adding density curve
+      geom_density() + 
+      # adding line for the observed value on the x-axis
+      geom_vline(xintercept = three_cycle_obs, lty= 2, col = "red",
+                 show.legend = T) +
+      ggtitle("Distribution of n simulations for # of three-cycle triads") + 
+      ylab("Density of the curve") + 
+      xlab("Three-cycles")
+    
+    # p-value
+    # 1 - proportion of networks with more observed three cycles than simulated
+    p <- 1 - (sum(three_cycle_obs > three_cycle_sim) / n)
+    
+    
+  } # end of else if 
+  
+  # comparing p-value to significance level alpha, defaults to alpha = 0.05
+  # if p-value is less than alpha, reject H0
+  # otherwise, fail to reject H0
+  
+  if (p < alpha) {
+    cat("p-value ", p, " < ", alpha, ", we reject the null hypothesis", sep = "")
+  }
+  else {
+    cat("p-value ", p, " > ", alpha, ", we fail to reject the null hypothesis", sep = "")
+  }
+  
+  return(plot)
+  
 }
