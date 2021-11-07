@@ -1,8 +1,9 @@
 ---
-title: "SOC 280 Final Project"
-author: "J Steven Raquel"
-date: "11/4/2021"
-output: html_document
+title: "Analyzing centralitty measures for a sexual network of gonorrhea transmission"
+authors: 
+- name: "J Steven Raquel"
+- affiliation: Department of Statistics, University of California, Irvine
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
@@ -10,10 +11,12 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(sna)
 library(igraph)
-library(epimdr)
-library(pvclust)
-library(CINNA)
+library(epimdr) # for gonnet data
+library(pvclust) # for pvclust()
+library(CINNA) # for pca_centralities()
+library(car) # for leveneTest()
 data(gonnet)
+source(here::here("functions.R"))
 ```
 
 # Abstract
@@ -39,6 +42,9 @@ data(gonnet)
 nodes <- rownames(gonnet)
 colnames(gonnet) <- nodes
 
+# symmetrized graph (undirected)
+gonnet_sym <- symmetrize(gonnet, rule = "weak")
+
 gonnet_df <- data.frame(nodes) %>%
   mutate(gender = ifelse(grepl("m", nodes), yes = "m", no = NA)) %>%
   mutate(gender = ifelse(grepl("f", nodes), yes = "f", no = gender)) %>%
@@ -58,10 +64,10 @@ gonnet_df$col[gonnet_df$nodes == "b"] <- "tomato1"
 par(mfrow = c(1,1))
 set.seed(10)
 org_coord <- 
-  gplot(gonnet, vertex.col = gonnet_df$col,
+  gplot(gonnet_sym, vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
       # displaylabels = T, label.cex = 0.6, label.pos = 2,
-      boxed.labels = F, pad = 2, 
+      boxed.labels = F, pad = 2, usearrows = F,
       vertex.cex = 1.25)
 # legend for gender
 legend("topleft",
@@ -79,12 +85,19 @@ title("Gonorrhea network, shaded by bar attendance")
 
 ```
 
-```{r centrality}
+```{r centrality-correlation}
 cen <- get_centralities(gonnet, "directed")
 
 # correlations between centrality measures
 centrality_correlations(gonnet, cen)
 
+cen_sym <- get_centralities(gonnet_sym, "undirected")
+centrality_correlations(gonnet_sym, cen_sym)
+
+```
+Notice that outdegree and indegree are negatively correlated, which makes sense in this context; an individual will only receive gonorrhea from one person (despite possibly having multiple sexual partners with a diagnosis)
+
+```{r centralities_more}
 # creating igraph object
 gonnet_ig <- graph_from_adjacency_matrix(gonnet)
 
@@ -102,66 +115,97 @@ pca_centralities(centralities)
 ```{r male-female-outdegree}
 gonnet_df2 <- cbind(gonnet_df, cen) %>% select(-id)
 
+# boxplot comparing outdegree
 outdegree_gender <- gonnet_df2 %>% 
   select(nodes, gender, outdegree) %>% 
   drop_na()
 
-# average outdegree overall
-mean(outdegree_gender$outdegree)
+ggplot(outdegree_gender, aes(x=gender, y=outdegree)) + 
+  geom_boxplot()
 
-# average outdegree among men
-outdegree_male <- 
-  outdegree_gender %>% 
-  filter(gender == "m") %>% 
-  select(nodes, outdegree)
-outdegree_male$outdegree %>% mean()
+# average outdegree overall
+gonnet_df2$outdegree %>% mean()
+
+# average outdegree among males in network, overall
+outdegree_m <- gonnet_df2 %>%
+  select(nodes, gender, outdegree) %>%
+  filter(gender == "m") %>%
+  select(outdegree) %>% 
+  unlist()
+outdegree_m %>% mean()
 
 # male outdegree that excludes nodes with zero outdegree
-outdegree_male_dropzero <- 
-  outdegree_male %>%
-  filter(outdegree != 0)
-outdegree_male_dropzero$outdegree %>% mean()
+gonnet_df2 %>%
+  select(nodes, gender, outdegree) %>%
+  filter(gender == "m" & outdegree != 0) %>%
+  select(outdegree) %>%
+  unlist() %>% mean()
 
 # average outdegree among females
-outdegree_female <- 
-  outdegree_gender %>%
+outdegree_f <- gonnet_df2 %>% 
+  select(nodes, gender, outdegree) %>%
   filter(gender == "f") %>% 
-  select(nodes, outdegree) 
-outdegree_female$outdegree %>% mean()
+  select(outdegree) %>%
+  unlist()
+outdegree_f %>% mean()
 
-outdegree_female_dropzero <-
-  outdegree_female %>%
-  filter(outdegree != 0)
-outdegree_female_dropzero$outdegree %>% mean()
+# female outdegree that excludes nodes with zero outdegree
+gonnet_df2 %>%
+  select(nodes, gender, outdegree) %>%
+  filter(gender == "f" & outdegree != 0) %>%
+  select(outdegree) %>%
+  unlist() %>% mean()
+
+# levene test for equality of variances
+# H0: the variance in outdegree between the two genders is equal
+outdegree_gender$gender <- as.factor(outdegree_gender$gender)
+  
+leveneTest(outdegree ~ gender, 
+           data = outdegree_gender)
+# p-value > 0.05, so we fail to reject H0, conclude the variances are equal
 
 # Student's t-test comparing the mean outdegree of men and women
-t.test(x = outdegree_male$outdegree, 
-       y = outdegree_female$outdegree,
-       var.equal = TRUE)
+# H0: mu_x - mu_y = 0
+t.test(x = outdegree_m, 
+       y = outdegree_f,
+       var.equal = T, alternative = "two.sided")
+# p-value = 0.5232 > 0.05, we fail to reject H0
 ```
 
 ```{r bar-attendance-outdegree}
-outdegree_bar <- gonnet_df2 %>%
-  select(nodes, attended_bar, outdegree)
+# boxplot comparing distribution of outdegree between bar (not)-attended
+ggplot(gonnet_df2 %>% filter(!(nodes %in% c("b", "x", "x2"))), 
+       aes(x = attended_bar, outdegree)) + 
+  geom_boxplot() + theme_bw()
 
 # average outdegree among bar attendees
-outdegree_bar %>% 
-  filter(attended_bar == TRUE) %>%
-  select(outdegree) %>% unlist() %>% mean()
+outdegree_bar <- gonnet_df2 %>% 
+  select(nodes, attended_bar, outdegree) %>%
+  filter(!(nodes %in% c("b", "x2", "x"))) %>%
+  filter(attended_bar == TRUE)
 
 # average outdegree among non-bar attendees
-outdegree_bar %>% 
-  filter(attended_bar == FALSE) %>%
-  select(outdegree) %>% unlist() %>% mean()
+outdegree_nobar <- gonnet_df2 %>% 
+  select(nodes, attended_bar, outdegree) %>%
+  filter(!(nodes %in% c("b", "x2", "x"))) %>%
+  filter(attended_bar == FALSE)
 
-
+# sample sizes are unequal, so we cannot assume equal variance
+# try two-sided Welch's t.test
+# H0: mu_x - mu_y = 0
+t.test(x = outdegree_bar$outdegree,
+       y = outdegree_nobar$outdegree,
+       var.equal = FALSE, alternative = "two.sided")
+# p-value < 0.05, reject H0
+# conclude the difference in mean outdegree is not equal to zero
 ```
 
 
-```{r simulations}
+```{r simulations, eval = F}
 # simulating similar networks and determining whether than outdegree is statistically significant
-mc_sim(gonnet, n = 1000, alpha = 0.05, "three-cycle")
-
+mc_sim(gonnet_sym, n = 1000, alpha = 0.05, "three-cycle")
+mc_sim(gonnet_sym, n = 1000, alpha = 0.05, "mutuality")
+mc_sim(gonnet_sym, n = 1000, alpha = 0.05, "transitivity")
 ```
 
 
@@ -171,6 +215,8 @@ outdegree_m <- cen$outdegree + 1
 outdegree_m[1] <- 1
 
 set.seed(10)
+
+# plotting based on outdegree
 gplot(gonnet, 
       vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
@@ -200,22 +246,24 @@ centrality_load <- centralities$`Load Centrality`
 centrality_degree <- centralities$`Degree Centrality`
 centrality_geodesic <- centralities$`Geodesic K-Path Centrality`
 centrality_shortest <- centralities$`Shortest-Paths Betweenness Centrality`
+centrality_info <- centralities$`Information Centrality`
 ```
 
 ```{r gplot-size-eigenvector-centrality}
 set.seed(10)
+
+centrality_degree[1] <- 1
 gplot(gonnet, vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
-      vertex.cex = centrality_degree,
+      vertex.cex = centrality_info %>% scale(),
       # displaylabels = T, label.cex = 0.6, label.pos = 2,
-      boxed.labels = F, pad = 2)
-
-
-
+      boxed.labels = F, pad = 2,
+      coord = org_coord)
 ```
 
 
 ```{r density-based clustering}
+set.seed(10)
 par(mfrow = c(1,1))
 clust <- hclust(dist(gonnet), method = "complete")
 # clust <- equiv.clust(gonnet)
@@ -317,7 +365,6 @@ title("Block sociogram")
 
 
 ```{r plotting-fast-greedy-community}
-par(mfrow = c(1,1))
 set.seed(10)
 par(mfrow = c(1,2))
 # original plot, again
@@ -338,13 +385,22 @@ legend("topright",
        fill = F, border = "white", pch = c(0, 2),
        title = "Gender", bty = "n")
 
+# adding in shape arguments for igraph to correspond to original sna gplot
+# View(gonnet_df)
+
+
 # fast and greedy community detection
-plot_fastgreedy_cd(gonnet, layout = org_coord, legend = F)
+plot_fastgreedy_cd(gonnet, layout = org_coord, 
+                   legend = F, vertex.size = 8)
 # labeling only the original bar patrons
 ```
 
 
-```{r kcores}
+```{r kcores, eval = F}
+par(mfrow = c(1,1))
+set.seed(10)
 edgelist <- as.edgelist(gonnet, n = dim(gonnet)[1])
-plot_kcores(edgelist, sym = T, mode = "digraph")
+plot_kcores(edgelist, sym = F, mode = "digraph", 
+            coord = org_coord,
+            cmode = "outdegree")
 ```

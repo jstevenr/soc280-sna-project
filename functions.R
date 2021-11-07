@@ -109,28 +109,32 @@ plot_max_cc <- function(matrix, displaylabels = F, title = "", legend = T, coord
 
 
 plot_kcores <- function(matrix, title = "", displaylabels = F, 
-                        coord = NA, sym = FALSE, mode = "graph") {
+                        coord = NA, sym = FALSE, mode = "graph",
+                        cmode = "freeman") {
   
   # symmetrize the network
   require(sna)
   require(dplyr)
   
   if (sym == TRUE) {
-    matrix <- symmetrize(matrix, rule = "weak")  
+    matrix <- symmetrize(matrix, rule = "weak") 
+    kcor <- kcores(matrix, mode = "graph", 
+                   cmode = cmode)
   }
-  
-  kcor <- kcores(matrix, mode) %>% 
+  else {
+    kcor <- kcores(matrix, mode = "digraph", cmode = cmode)
+  }
     #as.data.frame()  %>%
     #tibble::rownames_to_column() %>%
     #rename(node = "rowname", kcore = ".") %>%
     #mutate(kcore = as.factor(kcore))
     # kcores <- df_kcor$kcore %>% unique() %>% as.numeric() %>% sort()
-    gplot(matrix, displaylabels, 
-          usearrows=F, 
-          vertex.cex=1.5)
+  gplot(matrix, displaylabels, 
+        usearrows=F, 
+        vertex.cex=1.5)
   title(title)
   legend("topleft", 
-         legend = kcor,
+         legend = unique(kcor),
          col = kcor,
          fill = F,
          pch = 19, border = "white",
@@ -140,7 +144,8 @@ plot_kcores <- function(matrix, title = "", displaylabels = F,
 
 
 plot_fastgreedy_cd <- function(matrix, title = "", 
-                               layout = NULL, legend = TRUE) 
+                               layout = NULL, legend = TRUE,
+                               vertex.size = 15) 
   {
   
   require(igraph)
@@ -162,12 +167,14 @@ plot_fastgreedy_cd <- function(matrix, title = "",
   # if a layout matrix is provided, use it
   # can be a matrix of vertex coordinates as given by sna::gplot()
   if (is.matrix(layout)) {
-    plot.igraph(inet, layout = layout, vertex.label = NA)
+    plot.igraph(inet, layout = layout, vertex.label = NA, 
+                vertex.size = vertex.size)
   }
   # otherwise, use the fructerman-reingold layout
   else {
     fr <- layout.fruchterman.reingold(inet)
-    plot.igraph(inet, layout = fr, vertex.label = NA)  
+    plot.igraph(inet, layout = fr, 
+                vertex.label = NA, vertex.size = vertex.size)  
     
   }
   title(title)
