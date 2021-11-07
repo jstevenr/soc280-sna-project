@@ -15,27 +15,12 @@ library(epimdr) # for gonnet data
 library(pvclust) # for pvclust()
 library(CINNA) # for pca_centralities()
 library(car) # for leveneTest()
+library(factoextra) # for nbclust
+library(cluster)
+library(netdiffuseR)
 data(gonnet)
 source(here::here("functions.R"))
 ```
-
-# Abstract
-
-# Introduction
-
-# Methods
-
-# Results
-
-## Data Analysis
-
-### Centrality
-
-### Network Density
-
-### K-cores
-
-### Community Detection
 
 ```{r data-prep}
 # data is loaded as 'gonnet'
@@ -97,11 +82,13 @@ centrality_correlations(gonnet_sym, cen_sym)
 ```
 Notice that outdegree and indegree are negatively correlated, which makes sense in this context; an individual will only receive gonorrhea from one person (despite possibly having multiple sexual partners with a diagnosis)
 
-```{r centralities_more}
+```{r centralities_more, echo = F}
 # creating igraph object
 gonnet_ig <- graph_from_adjacency_matrix(gonnet)
 
-pc <- proper_centralities(gonnet_ig)
+(pc <- proper_centralities(gonnet_ig)) %>% 
+  capture.output() %>%
+  invisible()
 
 centralities <- calculate_centralities(gonnet_ig, 
                        include = pc[c(1, 4, 11, 16, 27, 
@@ -209,7 +196,7 @@ mc_sim(gonnet_sym, n = 1000, alpha = 0.05, "transitivity")
 ```
 
 
-```{r gplot-outdegree}
+```{r gplot-outdegree, echo = F}
 # normalizing the outdegree of bar because of course it has a high outdegree
 outdegree_m <- cen$outdegree + 1
 outdegree_m[1] <- 1
@@ -249,7 +236,7 @@ centrality_shortest <- centralities$`Shortest-Paths Betweenness Centrality`
 centrality_info <- centralities$`Information Centrality`
 ```
 
-```{r gplot-size-eigenvector-centrality}
+```{r gplot-size-eigenvector-centrality, echo = F}
 set.seed(10)
 
 centrality_degree[1] <- 1
@@ -261,11 +248,34 @@ gplot(gonnet, vertex.col = gonnet_df$col,
       coord = org_coord)
 ```
 
+```{r find-best-cluster-number, echo = F}
+# library(factoextra) is loaded
+fviz_nbclust(gonnet, kmeans, method = "wss", k.max = 30)
 
-```{r density-based clustering}
+# library(cluster) is loaded
+gap_stat <- clusGap(gonnet, FUN = kmeans, nstart = 25, K.max = 30, B = 50)
+fviz_gap_stat(gap_stat)
+```
+
+```{r kmeans-clustering}
+km <- kmeans(gonnet, centers = 21, nstart = 25)
+
+# fviz_cluster(km, data = gonnet_nob)
+
+# library(netdiffuseR) is loaded
+gonnet_edgelist <- adjmat_to_edgelist(gonnet, undirected = F)
+
+# cluster_membership
+km_cluster_mem <- km$cluster %>% as.data.frame() %>%
+  tibble::rownames_to_column() %>%
+  rename(node = 'rowname', cluster = '.')
+
+```
+
+```{r hierarchical-clustering, eval = F, echo = F}
 set.seed(10)
 par(mfrow = c(1,1))
-clust <- hclust(dist(gonnet), method = "complete")
+clust <- hclust(dist(gonnet), method = "average")
 # clust <- equiv.clust(gonnet)
 
 plot(clust)
@@ -291,6 +301,34 @@ title("Block sociogram")
 ```
 
 
+```{r agnes-hclust, echo = F}
+set.seed(10)
+par(mfrow = c(1,1))
+#define linkage methods
+hclust_methods <- c("average", "single", "complete", "ward")
+names(hclust_methods) <- hclust_methods
+#function to compute agglomerative coefficient
+ac <- function(data, method) {
+  agnes(data, method)$ac
+}
+
+# cluster is loaded
+
+#calculate agglomerative coefficient for each clustering linkage method
+ac_list <- list()
+for (i in 1:4) {
+  ac_list[[i]] <- agnes(gonnet, diss = FALSE, metric = "euclidean",
+                        method = hclust_methods[i])  
+  
+  print(ac_list[[i]]$ac)
+}
+# maximum agglomerative coefficient is from the single linkage algorithm
+
+# hclust using single and agnes
+clust <- agnes(gonnet, "single", diss = F)
+pltree(clust, cex = 0.6, hang = -1)
+```
+
 
 ```{r p-value-hierarchical-clustering, cache = T}
 fit <- 
@@ -301,24 +339,27 @@ fit <-
   parallel = T, # to use all but one CPU thread
   nboot = 1000) 
 ```
-```{r plot-dendrogram}
+```{r plot-dendrogram, echo = F}
 par(mfrow = c(1,1))
 plot(fit)
 pvrect(fit, alpha = 0.95)
 ```
 
-```{r blockmodel}
+
+
+```{r blockmodel, echo = F}
 set.seed(10)
 # if pchisq > 0.05, cluster is significant
 pp <- pvpick(fit)
 # number of significant clusters
 ideal_k <- pp$clusters %>% length()
 
+# note that these are just the "child" clusters and I want to include their parents
 
 # blockmodel using k = 58 and cutting trees at 0.5
 bm_complete <- blockmodel(gonnet,
                           ec = fit$hclust,
-                          k = ideal_k+9, mode = "digraph")
+                          k = ideal_k, mode = "digraph")
 
 bmR_complete <- reorder_blockmodel(bm_complete)
 # overall network density, which we will use for alpha
@@ -364,7 +405,7 @@ title("Block sociogram")
 
 
 
-```{r plotting-fast-greedy-community}
+```{r plotting-fast-greedy-community, echo = F}
 set.seed(10)
 par(mfrow = c(1,2))
 # original plot, again
@@ -372,7 +413,8 @@ org_coord <- gplot(gonnet, vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
       # displaylabels = T, label.cex = 0.6, label.pos = 2,
       boxed.labels = F, pad = 2, 
-      vertex.cex = 1.25)
+      vertex.cex = 1.25,
+      usearrows = F)
 # legend for gender
 legend("topleft",
        legend = c("yes", "no"),
@@ -384,14 +426,14 @@ legend("topright",
        col = c("black"),
        fill = F, border = "white", pch = c(0, 2),
        title = "Gender", bty = "n")
-
+title("Original graph")
 # adding in shape arguments for igraph to correspond to original sna gplot
-# View(gonnet_df)
 
 
 # fast and greedy community detection
 plot_fastgreedy_cd(gonnet, layout = org_coord, 
-                   legend = F, vertex.size = 8)
+                   legend = F, vertex.size = 6)
+title("Graph, shaded by fast-greedy community")
 # labeling only the original bar patrons
 ```
 

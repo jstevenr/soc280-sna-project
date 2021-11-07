@@ -151,6 +151,7 @@ plot_fastgreedy_cd <- function(matrix, title = "",
   require(igraph)
   require(dplyr)
   # Create igraph from a sociomatrix
+  message("Note: fast-greedy community algorithm is for undirected graphs.")
   inet <- graph.adjacency(matrix, mode = "undirected", diag = F)
   
   # fast.greedy communtiy detection algorithm
@@ -386,3 +387,4 @@ mc_sim <- function(sociomatrix, n, alpha = 0.05, test) {
   return(plot)
   
 }
+
