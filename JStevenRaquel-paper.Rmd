@@ -16,13 +16,29 @@ library(pvclust) # for pvclust()
 library(CINNA) # for pca_centralities()
 library(car) # for leveneTest()
 library(factoextra) # for nbclust
-library(cluster)
+library(cluster) # more cluster analysis
 library(netdiffuseR)
+library(dendextend) # for appealing dendrograms
+library(dynamicTreeCut)
 data(gonnet)
 source(here::here("functions.R"))
 ```
 
-```{r data-prep}
+# Abstract
+
+# Introduction
+
+Contact tracing for sexually transmitted diseases (STDs) such as gonorrhea, chlamydia, syphilis etc. is a persistent epidemiological problem, as it depends on individuals getting routinely tested as well as informing their sexual partners of their positive diagnosis should they receive one. Compounding this with the fact that many of these positive cases can be symptomless but still contagious creates a serious issue. Gonorrhea in particular is a disease that can be asymptomatic in both men and women who have it, that can go so far as causing infertility or lead to a life-threatening condition.
+
+This dataset, constructed in the form of an adjacency matrix, contains 89 nodes, one of which is the "event" of attending a bar (i.e. when a node has a tie with this bar node, it means they attend the bar). Two of these nodes (denoted by `x` and `x2`) are missing information about their gender which is otherwise indicated by an `m` or `f` in the label of the respective node, followed by a number with which to differentiate them.
+
+The network is directed, and the criteria for some node $i$ to have a tie with some other node $j$ must be that that $i$th node named node $j$ as a prior sexual partner. 
+
+The data was collected from a series of adjacent aboriginal communities located in the province of Alberta, Canada, where public health officials took note of a local gonorrhea outbreak and confirmed that attendance at a local bar in one such community was associated with infection (De 2003).
+
+# Methods
+
+```{r data-prep, echo = F}
 # data is loaded as 'gonnet'
 nodes <- rownames(gonnet)
 colnames(gonnet) <- nodes
@@ -45,14 +61,15 @@ gonnet_df$col[!(gonnet_df$gender %in% c("m", "f"))] <- "blue"
 gonnet_df$col[gonnet_df$nodes == "b"] <- "tomato1"
 ```
 
-```{r sociogram}
+
+```{r sociogram, fig.cap = "Sociogram of the gonorrhea network."}
 par(mfrow = c(1,1))
 set.seed(10)
 org_coord <- 
-  gplot(gonnet_sym, vertex.col = gonnet_df$col,
+  gplot(gonnet, vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
-      # displaylabels = T, label.cex = 0.6, label.pos = 2,
-      boxed.labels = F, pad = 2, usearrows = F,
+      displaylabels = T, label.cex = 0.6,
+      boxed.labels = F, pad = 2, usearrows = T,
       vertex.cex = 1.25)
 # legend for gender
 legend("topleft",
@@ -66,11 +83,19 @@ legend("topright",
        fill = F, border = "white", pch = c(0, 2),
        title = "Gender", bty = "n")
 # legend for bar attendance
-title("Gonorrhea network, shaded by bar attendance")
-
 ```
 
-```{r centrality-correlation}
+Looking at this initial sociogram, where the bar node is firmly in the center, we see that it has outgoing connections to 17 nodes, which themselves have connections to at least one other node in the rest of the network. 
+
+The majority of ties are between individuals of the opposite sex, e.g. male-to-female or female-to-male, but there are a minority of instances where individuals have a tie to individuals of the same sex, e.g. m112 has ties with both m106 and m107, who both in turn have ties to at least one female node. 
+
+The node m010 is also unique in that it happens to have outgoing ties to one female node (f024) and one male node (m018), the latter of which in turn has a tie with a female node (f023). The idea of men who have sex with men (MSM) or women who have sex with women (WSW) acting as bridging nodes between otherwise disparate sexual networks was something considered in the exploratory analysis but there just wasn't enough data to delve deeper into this subject.
+
+The first approach in the analysis was to look at the _centrality measures_ of each of the nodes.
+
+## Centrality Measures
+
+```{r centrality-correlation, echo = F}
 cen <- get_centralities(gonnet, "directed")
 
 # correlations between centrality measures
@@ -78,9 +103,8 @@ centrality_correlations(gonnet, cen)
 
 cen_sym <- get_centralities(gonnet_sym, "undirected")
 centrality_correlations(gonnet_sym, cen_sym)
-
 ```
-Notice that outdegree and indegree are negatively correlated, which makes sense in this context; an individual will only receive gonorrhea from one person (despite possibly having multiple sexual partners with a diagnosis)
+
 
 ```{r centralities_more, echo = F}
 # creating igraph object
@@ -99,6 +123,20 @@ pca_centralities(centralities)
 
 ```
 
+According to Borgatti and Everett (2006), _centrality_ is a summary index of a node's position in a graph, based on sums or averages of one of several things: 1) the number of edges the node has, 2) the length of the paths that end up at the node, or 3) the proportion of paths that contain the node inside of it (not as an endpoint).
+
+Different measures of centrality depend on functions of one of these aspects and communicate different things about a node, depending on the algorithm for the centrality measure. Among the centrality measures used in this analysis were that of _degree centrality_, _eigenvector centrality_, _load centrality_, and _information centrality_. 
+
+### Degree Centrality
+
+Degree centrality can be measured in multiple ways; the first is _indegree_ which is a count of the number of incoming ties that a node has. The second is _outdegree_ which conversely is the count of the number of outgoing ties that a node has. 
+
+The vast majority of nodes in the directed network have an indegree of 1, i.e. only one individual nominated that person as a sexual partner when interviewed. The outdegree was _at least_ 1 for most nodes in the network, but could be zero for nodes on the very outside of the network who did not name any sexual partners. 
+
+The overall degree of a node can be taken as the total amount of ties a node has, either incoming or outgoing, but in the case of an undirected graph, these are one and the same.
+
+#### Outdegree Centrality
+
 ```{r male-female-outdegree}
 gonnet_df2 <- cbind(gonnet_df, cen) %>% select(-id)
 
@@ -107,6 +145,7 @@ outdegree_gender <- gonnet_df2 %>%
   select(nodes, gender, outdegree) %>% 
   drop_na()
 
+# boxplot of outdegree by gender
 ggplot(outdegree_gender, aes(x=gender, y=outdegree)) + 
   geom_boxplot()
 
@@ -120,7 +159,7 @@ outdegree_m <- gonnet_df2 %>%
   select(outdegree) %>% 
   unlist()
 outdegree_m %>% mean()
-
+outdegree_m %>% median()
 # male outdegree that excludes nodes with zero outdegree
 gonnet_df2 %>%
   select(nodes, gender, outdegree) %>%
@@ -135,6 +174,7 @@ outdegree_f <- gonnet_df2 %>%
   select(outdegree) %>%
   unlist()
 outdegree_f %>% mean()
+outdegree_f %>% median()
 
 # female outdegree that excludes nodes with zero outdegree
 gonnet_df2 %>%
@@ -142,7 +182,19 @@ gonnet_df2 %>%
   filter(gender == "f" & outdegree != 0) %>%
   select(outdegree) %>%
   unlist() %>% mean()
+```
 
+The analysis gave that the overall average outdegree for the directed graph is approximately 1, implying that on average individuals named one sexual partner. It's important to note that many outer edges have an outdegree of 0, which skews down the mean calculation somewhat. 
+
+The implication of this observation is two-fold. For one, rather than most individuals in the network having many sexual partners, the implication of how outdegree is distributed in this network is that most individuals have as few as one, but there is a minority of individuals (of both genders) who named more. 
+
+#### Behavioral Considerations 
+
+There are some behavioral considerations taken into account when considering this data. The information regarding past sexual partners is entirely self-nominated on the part of the individual who represents the node in the graph, and as such, it's subject to an individual possibly withholding information, for a number of reasons. 
+
+There is a social stigma attached to promiscuity (having a high number of sexual partners), as well as living with an STD, so it's important to note that the data may be skewed by dishonesty on the part of the individuals comprising the dataset. For example, a person who receives a positive test result for a sexually transmitted disease may refrain from naming _all_ of their recent sexual partners, either to avoid having to communicate the uncomfortable truth of either having contracted or transmitted a disease, or to avoid judgment for divulging what may be perceived as a high number of sexual partners. Societal attitudes towards sex and sexual health both in a Western context and also in an indigenous/Aboriginal context can and should be kept in mind when drawing conclusions from this data.
+
+```{r levene-test-for-equal-variance, echo = F}
 # levene test for equality of variances
 # H0: the variance in outdegree between the two genders is equal
 outdegree_gender$gender <- as.factor(outdegree_gender$gender)
@@ -150,14 +202,40 @@ outdegree_gender$gender <- as.factor(outdegree_gender$gender)
 leveneTest(outdegree ~ gender, 
            data = outdegree_gender)
 # p-value > 0.05, so we fail to reject H0, conclude the variances are equal
+```
 
+```{r student-t-test-for-outdegree}
 # Student's t-test comparing the mean outdegree of men and women
 # H0: mu_x - mu_y = 0
 t.test(x = outdegree_m, 
        y = outdegree_f,
        var.equal = T, alternative = "two.sided")
 # p-value = 0.5232 > 0.05, we fail to reject H0
+
+
 ```
+
+### Eigenvector Centrality
+
+Eigenvector centrality is calculated both as a function of a node's degree but also as a function of the degree of the nodes it is connected to. In other words, a node with a high eigenvector centrality is well-connected to nodes that are themselves well-connected. 
+
+### Load Centrality
+
+### Information Centrality
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ```{r bar-attendance-outdegree}
 # boxplot comparing distribution of outdegree between bar (not)-attended
@@ -185,14 +263,6 @@ t.test(x = outdegree_bar$outdegree,
        var.equal = FALSE, alternative = "two.sided")
 # p-value < 0.05, reject H0
 # conclude the difference in mean outdegree is not equal to zero
-```
-
-
-```{r simulations, eval = F}
-# simulating similar networks and determining whether than outdegree is statistically significant
-mc_sim(gonnet_sym, n = 1000, alpha = 0.05, "three-cycle")
-mc_sim(gonnet_sym, n = 1000, alpha = 0.05, "mutuality")
-mc_sim(gonnet_sym, n = 1000, alpha = 0.05, "transitivity")
 ```
 
 
@@ -276,9 +346,10 @@ km_cluster_mem <- km$cluster %>% as.data.frame() %>%
 set.seed(10)
 par(mfrow = c(1,1))
 clust <- hclust(dist(gonnet), method = "average")
+clust_dend <- clust %>% 
+  as.dendrogram() %>% plot()
 # clust <- equiv.clust(gonnet)
 
-plot(clust)
 bm_complete <- blockmodel(gonnet,
                           ec = clust, k = 15)
 
@@ -297,7 +368,6 @@ gplot(density_matrix > alpha,
       vertex.col="grey",
       pad = 1.25)
 title("Block sociogram")
-
 ```
 
 
@@ -326,7 +396,15 @@ for (i in 1:4) {
 
 # hclust using single and agnes
 clust <- agnes(gonnet, "single", diss = F)
-pltree(clust, cex = 0.6, hang = -1)
+clust <- clust %>% as.hclust() %>% as.dendrogram() %>%
+  set("labels_color")  %>%  
+  set("labels_cex", c(2,3)) %>%
+  set("branches_lwd", c(2,4)) %>% 
+  set("branches_k_lty", k=3)  %>%  
+  set("branches_k_color", k = 3) %>% plot()
+
+
+#pltree(clust, cex = 0.6, hang = -1)
 ```
 
 
@@ -339,9 +417,15 @@ fit <-
   parallel = T, # to use all but one CPU thread
   nboot = 1000) 
 ```
+
+```{r dynamic-tree-cut}
+fit_hclust <- fit$hclust
+fit_hclust %>% cutreeDynamicTree(deepSplit = F)
+```
+
 ```{r plot-dendrogram, echo = F}
 par(mfrow = c(1,1))
-plot(fit)
+plot(fit, hang = -1, cex = 0.5)
 pvrect(fit, alpha = 0.95)
 ```
 
@@ -359,7 +443,7 @@ ideal_k <- pp$clusters %>% length()
 # blockmodel using k = 58 and cutting trees at 0.5
 bm_complete <- blockmodel(gonnet,
                           ec = fit$hclust,
-                          k = ideal_k, mode = "digraph")
+                          k = ideal_k + 9, mode = "digraph")
 
 bmR_complete <- reorder_blockmodel(bm_complete)
 # overall network density, which we will use for alpha
@@ -445,4 +529,19 @@ edgelist <- as.edgelist(gonnet, n = dim(gonnet)[1])
 plot_kcores(edgelist, sym = F, mode = "digraph", 
             coord = org_coord,
             cmode = "outdegree")
+```
+
+\newpage
+
+# References
+
+\newpage
+
+# Appendix
+
+```{r get-labels, echo = F}
+labs <- knitr::all_labels()
+```
+
+```{r ref.label = labs, eval = F}
 ```
