@@ -1,9 +1,29 @@
 ---
 title: "Analyzing centralitty measures for a sexual network of gonorrhea transmission"
-authors: 
+
+blinded: 0
+
+author: 
 - name: "J Steven Raquel"
-- affiliation: Department of Statistics, University of California, Irvine
-output: pdf_document
+  affiliation: Department of Statistics, University of California, Irvine
+
+keywords: 
+- social network analysis
+- sexually transmitted diseases
+- epidemiology
+- centrality
+- clustering
+
+mainfont: Times New Roman
+sansfont: Times New Roman
+fontsize: 12pt
+linespread: 2
+output:
+  bookdown::pdf_book: 
+    toc: no
+    keep_tex: true
+    base_format: rticles::asa_article
+
 ---
 
 ```{r setup, include=FALSE}
@@ -23,8 +43,6 @@ library(dynamicTreeCut)
 data(gonnet)
 source(here::here("functions.R"))
 ```
-
-# Abstract
 
 # Introduction
 
@@ -346,8 +364,7 @@ km_cluster_mem <- km$cluster %>% as.data.frame() %>%
 set.seed(10)
 par(mfrow = c(1,1))
 clust <- hclust(dist(gonnet), method = "average")
-clust_dend <- clust %>% 
-  as.dendrogram() %>% plot()
+clust_dend <- clust %>% as.dendrogram()
 # clust <- equiv.clust(gonnet)
 
 bm_complete <- blockmodel(gonnet,
