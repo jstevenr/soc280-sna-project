@@ -14,6 +14,9 @@ keywords:
 - centrality
 - clustering
 
+abstract: |
+  
+
 mainfont: Times New Roman
 sansfont: Times New Roman
 fontsize: 12pt
@@ -412,14 +415,7 @@ for (i in 1:4) {
 # maximum agglomerative coefficient is from the single linkage algorithm
 
 # hclust using single and agnes
-clust <- agnes(gonnet, "single", diss = F)
-clust <- clust %>% as.hclust() %>% as.dendrogram() %>%
-  set("labels_color")  %>%  
-  set("labels_cex", c(2,3)) %>%
-  set("branches_lwd", c(2,4)) %>% 
-  set("branches_k_lty", k=3)  %>%  
-  set("branches_k_color", k = 3) %>% plot()
-
+# clust <- agnes(gonnet, "single", diss = F)
 
 #pltree(clust, cex = 0.6, hang = -1)
 ```
@@ -556,9 +552,9 @@ plot_kcores(edgelist, sym = F, mode = "digraph",
 
 # Appendix
 
-```{r get-labels, echo = F}
+```{r get-labels, echo = F, include = F}
 labs <- knitr::all_labels()
 ```
 
-```{r ref.label = labs, eval = F}
+```{r ref.label = labs, eval = F, include = F}
 ```
