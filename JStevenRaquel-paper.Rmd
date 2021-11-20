@@ -38,6 +38,7 @@ library(dynamicTreeCut)
 library(kable)
 library(kableExtra)
 library(knitr)
+library(ergm)
 data(gonnet)
 source(here::here("functions.R"))
 ```
@@ -54,8 +55,30 @@ The network is directed, and the criteria for some node $i$ to have a tie with s
 
 The data was collected from a series of adjacent aboriginal communities located in the province of Alberta, Canada, where public health officials took note of a local gonorrhea outbreak and confirmed that attendance at a local bar in one such community was associated with infection (De 2003).
 
+# Background
+
+## Data Collection 
+
+The sociometric approach for enumerating a sexual network entails an iterative process in which the subject names past sexual partners, who are them traced and interviewed to identify whether they are linked and also to identify other contacts in the network (Doherty 2005). Conversely, the egocentric approach bases the network entirely on the information volunteered by the original subject. 
+
+There are a number of shortcomings that are inherent to mapping out a sexual network, the first being that the design suffers from incomplete-network bias when partners cannot be traced or recruited for a variety of reasons (Doherty 2005). For example, the contact tracing of sexual partners is relegated to those who have a positive test result, and since such individuals may have markedly different positions within a network, tracing a network consisting solely of STI-positive partners has an inherent bias.
+
+For example, consider that the prevalence of STI infection has a high negative correlation with condom usage i.e. using condoms infrequently, or not at all, comes with a higher risk of contracting an STI. If we assume individuals who engage in this kind of risky behavior on a regular basis are more likely to test positive for an STI, then the mapping of our sexual network may predominantly include only those individuals who partake in this behavior to some degree, and their partners with whom they had safe sex with (or simply did not transmit an STI to) will go unrecorded.
+
+There are some behavioral considerations taken into account when considering this data, as is inherent with studies in which data is based on information nominated directly from the subjects. In a sexual network such as this the information regarding past sexual partners is volunteered on the part of the individual who represents the node in the graph, and as such, it's subject to an individual possibly withholding information, or simply not having the information at all. For example, an individual may be reluctant to disclose the identity of a sexual partner if they are in a monogamous relationship and to disclose this event would mean owning up to infidelity, or perhaps if the sex was in exchange for money i.e. sex work. It could also be that the sex occurred in an anonymous context and they simply do not have the information on the individual.
+
+There is a social stigma attached to promiscuity (having a high number of sexual partners), as well as living with an STI, so it's important to note that the data may be skewed by dishonesty on the part of the individuals comprising the dataset. For example, a person who receives a positive test result for a sexually transmitted disease may refrain from naming _all_ of their recent sexual partners, either to avoid having to communicate the uncomfortable truth of either having contracted or transmitted a disease, or to avoid judgment for divulging what may be perceived as a high number of sexual partners. Societal attitudes towards sex and sexual health both in a Western context and also in an indigenous/Aboriginal context can and should be kept in mind when drawing conclusions from this data.
+
+Some of these biases could be mitigated if we had all of the complete information on infection/non-infection status and were able to recruit all members of a sexual network, but this is impractical, improbable, or even illegal in some areas. These biases are inherent to these types of models but these studies still are important in anticipating and modeling the spread of STIs due to the highly social component of transmission, compared to for example, the spread of influenza.
+
+## Terminology
+
+* note to refer to "bridges" and "cut points" as defined in 
+
+
 # Methods
 
+# Data Analysis
 ```{r data-prep, echo = F}
 # data is loaded as 'gonnet'
 nodes <- rownames(gonnet)
@@ -221,11 +244,8 @@ The analysis gave that the overall average outdegree for the directed graph is a
 
 The implication of this observation is two-fold. For one, rather than most individuals in the network having many sexual partners, the implication of how outdegree is distributed in this network is that most individuals have as few as one, but there is a minority of individuals (of both genders) who named more. 
 
-#### Behavioral Considerations 
 
-There are some behavioral considerations taken into account when considering this data. The information regarding past sexual partners is entirely self-nominated on the part of the individual who represents the node in the graph, and as such, it's subject to an individual possibly withholding information, for a number of reasons. 
 
-There is a social stigma attached to promiscuity (having a high number of sexual partners), as well as living with an STD, so it's important to note that the data may be skewed by dishonesty on the part of the individuals comprising the dataset. For example, a person who receives a positive test result for a sexually transmitted disease may refrain from naming _all_ of their recent sexual partners, either to avoid having to communicate the uncomfortable truth of either having contracted or transmitted a disease, or to avoid judgment for divulging what may be perceived as a high number of sexual partners. Societal attitudes towards sex and sexual health both in a Western context and also in an indigenous/Aboriginal context can and should be kept in mind when drawing conclusions from this data.
 
 ```{r levene-test-for-equal-variance, echo = F}
 # levene test for equality of variances
@@ -557,7 +577,36 @@ plot_kcores(edgelist, sym = F, mode = "digraph",
 
 ## Exponential Random Graph Model (ERGM)
 
+Exponential random graph models (ERGMs) are a family of statistical models for social networks that permit inference about prominent patterns in the data, given the presence of other network structures (Carrington and Scott, 2011). For a given set of $n$ actors, an ERGM models an observed network $x$ by assigning a probability to every network of $n$ actors, and the form of such a model is as follows
 
+$$\Pr(X = x) = \frac{1}{k} \exp\{\sum_A \eta_Ag_A(x) \}$$
+where the sum is over all configuration types $A$; 
+
+* $\eta_A$ is a parameter correpsonding to configuration type $A$; 
+* $g_A(x)$ is the _network statistic_ for $A$ and is the number of configurations $A$ observed in $x$
+* $k$ normalizes this to be a proper probability distribution.
+
+This equation implies that there is a probability distribution of all possible networks with $n$ nodes, with each such network having their own distinct probability.
+
+```{r ergm}
+# library(ergm) is loaded
+edges <- rep(1, 89)
+ergm_model <- ergm(gonnet ~ edges)
+summary(ergm_model)
+
+exp1 <- coef(ergm_model) %>% exp()
+
+exp1 / (1 + exp1)
+
+# nodes that went to the bar
+bar_attendees <- 
+  gonnet["b",] %>% as.data.frame() %>%
+  dplyr::rename(bar = ".") %>%
+  filter(bar == 1) %>% row.names()
+
+ergm_model2 <- ergm(gonnet ~ edges + nodematch(attr = ""))
+summary(ergm_model2)
+```
 
 
 \newpage
@@ -566,6 +615,9 @@ plot_kcores(edgelist, sym = F, mode = "digraph",
 
 De P, Singh AE, Wong T, et al. 2004. "Sexual network analysis of a gonorrhea     outbreak." *Sexually Transmitted Infections* 80:280-285.
 
+Carrington, P. and Scott, J., 2011. *The SAGE handbook of social network          analysis. 1st ed.* Los Angeles [etc.]: SAGE Publications, pp.484-500.
+
+  Irene A. Doherty, Nancy S. Padian, Cameron Marlow, Sevgi O. Aral, Determinants and Consequences of Sexual Networks as They Affect the Spread of Sexually Transmitted Infections, The Journal of Infectious Diseases, Volume 191, Issue Supplement_1, February 2005, Pages S42–S54, https://doi.org/10.1086/425277
 
 \newpage
 
