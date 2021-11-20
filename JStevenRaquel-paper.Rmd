@@ -22,7 +22,7 @@ header-includes:
 \doublespacing
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 library(tidyverse)
 library(sna)
 library(igraph)
@@ -35,6 +35,9 @@ library(cluster) # more cluster analysis
 library(netdiffuseR)
 library(dendextend) # for appealing dendrograms
 library(dynamicTreeCut)
+library(kable)
+library(kableExtra)
+library(knitr)
 data(gonnet)
 source(here::here("functions.R"))
 ```
@@ -152,7 +155,7 @@ The overall degree of a node can be taken as the total amount of ties a node has
 
 #### Outdegree Centrality
 
-```{r male-female-outdegree}
+```{r figure-male-female-outdegree}
 gonnet_df2 <- cbind(gonnet_df, cen) %>% select(-id)
 
 # boxplot comparing outdegree
@@ -163,9 +166,11 @@ outdegree_gender <- gonnet_df2 %>%
 # boxplot of outdegree by gender
 ggplot(outdegree_gender, aes(x=gender, y=outdegree)) + 
   geom_boxplot()
+```
 
+```{r table-male-female-outdegree, echo = F}
 # average outdegree overall
-gonnet_df2$outdegree %>% mean()
+mean_overall_outdegree <- gonnet_df2$outdegree %>% mean()
 
 # average outdegree among males in network, overall
 outdegree_m <- gonnet_df2 %>%
@@ -173,10 +178,11 @@ outdegree_m <- gonnet_df2 %>%
   filter(gender == "m") %>%
   select(outdegree) %>% 
   unlist()
-outdegree_m %>% mean()
-outdegree_m %>% median()
-# male outdegree that excludes nodes with zero outdegree
-gonnet_df2 %>%
+mean_male_outdegree <- outdegree_m %>% mean()
+
+# mean male outdegree that excludes nodes with zero outdegree
+mean_male_outdegree_nonzero <- 
+  gonnet_df2 %>%
   select(nodes, gender, outdegree) %>%
   filter(gender == "m" & outdegree != 0) %>%
   select(outdegree) %>%
@@ -188,15 +194,27 @@ outdegree_f <- gonnet_df2 %>%
   filter(gender == "f") %>% 
   select(outdegree) %>%
   unlist()
-outdegree_f %>% mean()
-outdegree_f %>% median()
+mean_female_outdegree <- outdegree_f %>% mean()
 
-# female outdegree that excludes nodes with zero outdegree
-gonnet_df2 %>%
+# mean female outdegree that excludes nodes with zero outdegree
+mean_female_outdegree_nonzero <- gonnet_df2 %>%
   select(nodes, gender, outdegree) %>%
   filter(gender == "f" & outdegree != 0) %>%
   select(outdegree) %>%
   unlist() %>% mean()
+
+mat <- matrix(data = c(mean_male_outdegree, mean_male_outdegree_nonzero,
+                       mean_female_outdegree, mean_female_outdegree_nonzero),
+              nrow = 2,
+              ncol = 2,
+              dimnames = list(c("Male", "Female"),
+                              c("With Zeroes", "Without Zeroes")))
+
+# table
+kbl(mat) %>% 
+  kable_classic() %>%
+  add_header_above(c("Gender" = 1, "Mean Outdegree" = 2))
+  
 ```
 
 The analysis gave that the overall average outdegree for the directed graph is approximately 1, implying that on average individuals named one sexual partner. It's important to note that many outer edges have an outdegree of 0, which skews down the mean calculation somewhat. 
@@ -226,8 +244,6 @@ t.test(x = outdegree_m,
        y = outdegree_f,
        var.equal = T, alternative = "two.sided")
 # p-value = 0.5232 > 0.05, we fail to reject H0
-
-
 ```
 
 ### Eigenvector Centrality
@@ -539,6 +555,10 @@ plot_kcores(edgelist, sym = F, mode = "digraph",
 ```
 
 
+## Exponential Random Graph Model (ERGM)
+
+
+
 
 \newpage
 
@@ -553,7 +573,8 @@ De P, Singh AE, Wong T, et al. 2004. "Sexual network analysis of a gonorrhea    
 
 ```{r get-labels, echo = F, include = F}
 labs <- knitr::all_labels()
+#```{r ref.label = labs, eval = F, include = F}
+#```
+
 ```
 
-```{r ref.label = labs, eval = F, include = F}
-```

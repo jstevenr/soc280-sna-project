@@ -20,3 +20,8 @@ pvclust
 CINNA
 carData
 car
+factoextra
+cluster
+netdiffuseR
+dendextend
+dynamicTreeCut
