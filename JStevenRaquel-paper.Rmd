@@ -614,38 +614,73 @@ This equation implies that there is a probability distribution of all possible n
 ```{r ergm-data}
 gonnet.degreedist <- table(sna::degree(gonnet, cmode = "outdegree"))
 gonnet.degreedist
-summary(gonnet ~ odegree(0:3, gonnet_df2$gender))
 
 # creating a network object, symmetric
 gonnet_net <- network(gonnet, directed = TRUE) 
-
-# adding bar attendance on graph
+gonnet_sym_net <- network(gonnet, directed = FALSE)
+# adding bar attendance on graphs
 network::set.vertex.attribute(gonnet_net, 'bar', 
+                             gonnet_df2$attended_bar)
+network::set.vertex.attribute(gonnet_sym_net, 'bar', 
                              gonnet_df2$attended_bar)
 # adding gender attribute on graph
 network::set.vertex.attribute(gonnet_net, 'gender', gonnet_df2$gender)
+network::set.vertex.attribute(gonnet_sym_net, 'gender', gonnet_df2$gender)
 
 # degree for symmetric network
-gonnet_net %>% sna::degree() %>% table()
+gonnet_sym_net %>% sna::degree() %>% table()
 ```
 
 
 ```{r ergm}
+set.seed(55)
 # library(ergm) is loaded
-# nodematch (homophily)
-# nodemix (heterophily)
+# simple model
+ergm_model1 <- ergm(gonnet_net ~ edges)
 
-ergm_model2 <- ergm(gonnet_net ~ edges + nodematch("bar"))
+# homophily
+# do bar patrons hook up with one another?
+ergm_model2 <- ergm(gonnet_sym_net ~ edges + nodematch("bar"))
 summary(ergm_model2)
-
 # goodness of fit test
+# closer the p-value is to 1 the better, both are very close to 1
 model2_gof <- gof(ergm_model2, GOF = ~model)
 model2_gof
+plot(model2_gof)
+# likelihood ratio test to compare model1 to model 2
+# H0: the simpler model is preferred
+anova(ergm_model1, ergm_model2)
 
-# closer the p-value is to 1 the better, both are very close to 1
-gonnet_sym_net <- network(gonnet, directed = FALSE)
-gonnet_sym_net %>% sna::degree() %>% table()
-ergm_model3 <- ergm(gonnet_sym_net ~ edges + degree(d = c(2:8)))
+# using symmetric model
+# 
+ergm_model3 <- ergm(gonnet_sym_net ~ edges + degree(d = c(2:3)))
+summary(ergm_model3)
+# diagnostics
+mcmc.diagnostics(ergm_model3)
+model3_gof <- gof(ergm_model3, GOF = ~model)
+model3_gof
+plot(model3_gof)
+
+# testing bar attendance effect on outdegree
+ergm_model4 <- ergm(gonnet_net ~ edges + nodeocov("bar"))
+summary(ergm_model4)
+model4_gof <- gof(ergm_model4, GOF = ~model)
+model4_gof
+plot(model4_gof)
+
+# nodecov 
+ergm_model5 <- ergm(gonnet_sym_net ~ edges + nodecov("bar"))
+summary(ergm_model5)
+model5_gof <- gof(ergm_model5, GOD = ~model)
+model5_gof
+plot(model5_gof)
+
+# nodefactor
+ergm_model6 <- ergm(gonnet_net ~ edges + nodefactor("bar"))
+summary(ergm_model6)
+model6_gof <- gof(ergm_model6, GOF = ~model)
+model6_gof
+plot(model6_gof)
 ```
 
 
