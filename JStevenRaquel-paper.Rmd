@@ -1,11 +1,7 @@
 ---
 title: "Analyzing centralitty measures for a sexual network of gonorrhea transmission"
-
-blinded: 0
-
-author: 
-  name: "J Steven Raquel"
-  affiliation: Department of Statistics, University of California, Irvine
+subtitle: "SOC 280 Fall 2021"
+author: "J Steven Raquel"
 
 mainfont: Times New Roman
 sansfont: Times New Roman
@@ -19,7 +15,6 @@ header-includes:
 
 ---
 
-\doublespacing
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
@@ -35,13 +30,17 @@ library(cluster) # more cluster analysis
 library(netdiffuseR)
 library(dendextend) # for appealing dendrograms
 library(dynamicTreeCut)
-library(kable)
 library(kableExtra)
 library(knitr)
 library(ergm)
+library(coda)
+library(statnet)
 data(gonnet)
 source(here::here("functions.R"))
 ```
+
+
+\doublespacing
 
 # Abstract
 
@@ -71,14 +70,18 @@ There is a social stigma attached to promiscuity (having a high number of sexual
 
 Some of these biases could be mitigated if we had all of the complete information on infection/non-infection status and were able to recruit all members of a sexual network, but this is impractical, improbable, or even illegal in some areas. These biases are inherent to these types of models but these studies still are important in anticipating and modeling the spread of STIs due to the highly social component of transmission, compared to for example, the spread of influenza.
 
-## Terminology
-
-* note to refer to "bridges" and "cut points" as defined in 
-
+Wasserman and Faust (1994) define "cutpoints" and "bridges" as nodes and ties respectively that cause the graph in which they are contained to have less components if they were to be taken out from the graph. In other words, they are the nodes or ties that connect what would be otherwise unconnected sub-graphs. These are crucial in sexual network analysis because these nodes and ties are the difference between whether a certain network may propagate an STI outbreak or not. 
 
 # Methods
 
-# Data Analysis
+# Results
+
+# Discussion
+
+# Conclusions
+
+\singlespacing
+
 ```{r data-prep, echo = F}
 # data is loaded as 'gonnet'
 nodes <- rownames(gonnet)
@@ -102,6 +105,10 @@ gonnet_df$col[!(gonnet_df$gender %in% c("m", "f"))] <- "blue"
 gonnet_df$col[gonnet_df$nodes == "b"] <- "tomato1"
 ```
 
+```{r fig-data-summary}
+table(component.dist(gonnet)$csize)
+
+```
 
 ```{r sociogram, fig.cap = "Sociogram of the gonorrhea network."}
 par(mfrow = c(1,1))
@@ -126,6 +133,8 @@ legend("topright",
 # legend for bar attendance
 ```
 
+\doublespacing
+
 Looking at this initial sociogram, where the bar node is firmly in the center, we see that it has outgoing connections to 17 nodes, which themselves have connections to at least one other node in the rest of the network. 
 
 The majority of ties are between individuals of the opposite sex, e.g. male-to-female or female-to-male, but there are a minority of instances where individuals have a tie to individuals of the same sex, e.g. m112 has ties with both m106 and m107, who both in turn have ties to at least one female node. 
@@ -135,6 +144,8 @@ The node m010 is also unique in that it happens to have outgoing ties to one fem
 The first approach in the analysis was to look at the _centrality measures_ of each of the nodes.
 
 ## Centrality Measures
+
+\singlespacing
 
 ```{r centrality-correlation, echo = F}
 cen <- get_centralities(gonnet, "directed")
@@ -164,6 +175,8 @@ pca_centralities(centralities)
 
 ```
 
+\doublespacing
+
 According to Borgatti and Everett (2006), _centrality_ is a summary index of a node's position in a graph, based on sums or averages of one of several things: 1) the number of edges the node has, 2) the length of the paths that end up at the node, or 3) the proportion of paths that contain the node inside of it (not as an endpoint).
 
 Different measures of centrality depend on functions of one of these aspects and communicate different things about a node, depending on the algorithm for the centrality measure. Among the centrality measures used in this analysis were that of _degree centrality_, _eigenvector centrality_, _load centrality_, and _information centrality_. 
@@ -177,6 +190,8 @@ The vast majority of nodes in the directed network have an indegree of 1, i.e. o
 The overall degree of a node can be taken as the total amount of ties a node has, either incoming or outgoing, but in the case of an undirected graph, these are one and the same.
 
 #### Outdegree Centrality
+
+\singlespacing
 
 ```{r figure-male-female-outdegree}
 gonnet_df2 <- cbind(gonnet_df, cen) %>% select(-id)
@@ -240,12 +255,14 @@ kbl(mat) %>%
   
 ```
 
+\doublespacing
+
 The analysis gave that the overall average outdegree for the directed graph is approximately 1, implying that on average individuals named one sexual partner. It's important to note that many outer edges have an outdegree of 0, which skews down the mean calculation somewhat. 
 
 The implication of this observation is two-fold. For one, rather than most individuals in the network having many sexual partners, the implication of how outdegree is distributed in this network is that most individuals have as few as one, but there is a minority of individuals (of both genders) who named more. 
 
 
-
+\singlespacing
 
 ```{r levene-test-for-equal-variance, echo = F}
 # levene test for equality of variances
@@ -265,6 +282,8 @@ t.test(x = outdegree_m,
        var.equal = T, alternative = "two.sided")
 # p-value = 0.5232 > 0.05, we fail to reject H0
 ```
+
+\doublespacing
 
 ### Eigenvector Centrality
 
@@ -286,7 +305,7 @@ Eigenvector centrality is calculated both as a function of a node's degree but a
 
 
 
-
+\singlespacing
 
 ```{r bar-attendance-outdegree}
 # boxplot comparing distribution of outdegree between bar (not)-attended
@@ -574,6 +593,8 @@ plot_kcores(edgelist, sym = F, mode = "digraph",
             cmode = "outdegree")
 ```
 
+\doublespacing
+
 
 ## Exponential Random Graph Model (ERGM)
 
@@ -588,28 +609,49 @@ where the sum is over all configuration types $A$;
 
 This equation implies that there is a probability distribution of all possible networks with $n$ nodes, with each such network having their own distinct probability.
 
+\singlespacing
+
+```{r ergm-data}
+gonnet.degreedist <- table(sna::degree(gonnet, cmode = "outdegree"))
+gonnet.degreedist
+summary(gonnet ~ odegree(0:3, gonnet_df2$gender))
+
+# creating a network object, symmetric
+gonnet_net <- network(gonnet, directed = TRUE) 
+
+# adding bar attendance on graph
+network::set.vertex.attribute(gonnet_net, 'bar', 
+                             gonnet_df2$attended_bar)
+# adding gender attribute on graph
+network::set.vertex.attribute(gonnet_net, 'gender', gonnet_df2$gender)
+
+# degree for symmetric network
+gonnet_net %>% sna::degree() %>% table()
+```
+
+
 ```{r ergm}
 # library(ergm) is loaded
-edges <- rep(1, 89)
-ergm_model <- ergm(gonnet ~ edges)
-summary(ergm_model)
+# nodematch (homophily)
+# nodemix (heterophily)
 
-exp1 <- coef(ergm_model) %>% exp()
-
-exp1 / (1 + exp1)
-
-# nodes that went to the bar
-bar_attendees <- 
-  gonnet["b",] %>% as.data.frame() %>%
-  dplyr::rename(bar = ".") %>%
-  filter(bar == 1) %>% row.names()
-
-ergm_model2 <- ergm(gonnet ~ edges + nodematch(attr = ""))
+ergm_model2 <- ergm(gonnet_net ~ edges + nodematch("bar"))
 summary(ergm_model2)
+
+# goodness of fit test
+model2_gof <- gof(ergm_model2, GOF = ~model)
+model2_gof
+
+# closer the p-value is to 1 the better, both are very close to 1
+gonnet_sym_net <- network(gonnet, directed = FALSE)
+gonnet_sym_net %>% sna::degree() %>% table()
+ergm_model3 <- ergm(gonnet_sym_net ~ edges + degree(d = c(2:8)))
 ```
 
 
 \newpage
+
+\doublespacing
 
 # References
 
@@ -619,9 +661,13 @@ Carrington, P. and Scott, J., 2011. *The SAGE handbook of social network        
 
   Irene A. Doherty, Nancy S. Padian, Cameron Marlow, Sevgi O. Aral, Determinants and Consequences of Sexual Networks as They Affect the Spread of Sexually Transmitted Infections, The Journal of Infectious Diseases, Volume 191, Issue Supplement_1, February 2005, Pages S42–S54, https://doi.org/10.1086/425277
 
+Wasserman, S. and Faust, K., 1994. Social network analysis: methods and applications. Cambridge: Cambridge University Press.
+
 \newpage
 
 # Appendix
+
+\singlespacing
 
 ```{r get-labels, echo = F, include = F}
 labs <- knitr::all_labels()
