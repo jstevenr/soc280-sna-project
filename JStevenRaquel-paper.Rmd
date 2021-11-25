@@ -17,7 +17,7 @@ header-includes:
 
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(sna)
 library(igraph)
@@ -35,7 +35,6 @@ library(knitr)
 library(ergm)
 library(coda)
 library(statnet)
-data(gonnet)
 source(here::here("functions.R"))
 ```
 
@@ -83,29 +82,39 @@ Wasserman and Faust (1994) define "cutpoints" and "bridges" as nodes and ties re
 \singlespacing
 
 ```{r data-prep, echo = F}
+# library(epimdr) is loaded
+data(gonnet)
 # data is loaded as 'gonnet'
 nodes <- rownames(gonnet)
+# indices where "x" and "x2 are
+xs <- which(nodes %in% c("x", "x2"))
+# drop rows/columns with these numbers
+gonnet <- gonnet[-xs, -xs]
 # symmetrized graph (undirected)
 gonnet <- symmetrize(gonnet, rule = "weak")
+nodes <- nodes[-xs]
 rownames(gonnet) <- nodes
 colnames(gonnet) <- nodes
 
+
+# creating data.frame with traits
 gonnet_df <- data.frame(nodes) %>%
   dplyr::mutate(gender = ifelse(grepl("m", nodes), yes = "m", no = NA)) %>%
   dplyr::mutate(gender = ifelse(grepl("f", nodes), yes = "f", no = gender)) %>%
   dplyr::mutate(gender_lty = ifelse(gender == "m", yes = 4, no = 3)) %>%
   dplyr::mutate(gender_lty = ifelse(gender == "f", yes = 3, no = gender_lty)) %>%
-  dplyr::mutate(gender_lty = ifelse(gender %in% c("m", "f"), yes = gender_lty, no = 50)
-         ) %>%
+  dplyr::mutate(gender_lty = ifelse(gender %in% c("m", "f"), yes = gender_lty, no = 50)) %>%
   dplyr::mutate(attended_bar = (gonnet["b",] == 1)) %>%
   dplyr::mutate(col = ifelse(attended_bar == T, "tomato1", "grey"))
 
 
 gonnet_df$col[!(gonnet_df$gender %in% c("m", "f"))] <- "blue"
 gonnet_df$col[gonnet_df$nodes == "b"] <- "tomato1"
+gonnet_df$gender[gonnet_df$nodes == "b"] <- "NA"
 ```
 
-```{r sociogram, fig.cap = "Sociogram of the gonorrhea network."}
+```{r sociogram, fig.cap = "Sociogram of the gonorrhea network.", echo = F}
+# data is loaded as gonnet
 par(mfrow = c(1,1))
 set.seed(10)
 org_coord <- 
@@ -178,7 +187,7 @@ The overall degree of a node can be taken as the total amount of ties a node has
 
 \singlespacing
 
-```{r figure-male-female-degree}
+```{r adding-centralities, include = F}
 # we care about 
 # closeness centrality, katz centrality, eigenvector centrality, avg distance, degree centrality, and information centrality
 
@@ -190,36 +199,50 @@ cen <- data.frame(closeness = centralities$`Closeness Centrality (Freeman)`,
                   information = centralities$`Information Centrality`)
 
 gonnet_df2 <- cbind(gonnet_df, cen)
+```
 
-# boxplot comparing degree
-degree_gender <- gonnet_df2 %>% 
-  select(nodes, gender, degree) %>% 
-  drop_na()
-
-# boxplot of degree by gender
-ggplot(degree_gender, aes(x=gender, y=degree)) + 
-  geom_boxplot() +
-  ggtitle("Boxplot of Degree, Males vs Females") +
+```{r figure-bar-degree, fig.cap = "Distribution of degree, by bar attendance.", echo=FALSE}
+# boxplot of degree by bar attendance
+gonnet_df2 %>%
+  filter(!is.na(gender)) %>%
+  ggplot(aes(x = attended_bar, y = degree)) +
+  geom_boxplot() + 
+  ggtitle("Boxplot of Degree, by Bar Attendance") +
   theme_bw()
 ```
 
-```{r table-male-female-degree, echo = F}
+```{r figure-gender-degree, fig.cap = "Distribution of degree, by gender.", echo=FALSE}
+# boxplot of degree by gender
+gonnet_df2 %>%
+  filter(!(gender == "NA")) %>%
+  ggplot(aes(x = gender, y = degree)) +
+  geom_boxplot() + 
+  ggtitle("Boxplot of Degree, by Gender") +
+  theme_bw()
+```
+
+```{r table-male-female-degree, fig.cap = "Average degree, by gender.", echo = F}
 # average degree overall
 mean_overall_degree <- gonnet_df2$degree %>% mean()
 
 gonnet_df2 %>% 
-  filter(!is.na(gender)) %>%
+  filter(!(gender == "NA")) %>%
   group_by(gender) %>%
-  summarize(average_degree = mean(degree)) %>% 
+  summarize(average_degree = mean(degree) %>% round(3)) %>% 
   kbl(col.names = c("Gender", "Mean Degree")) %>%
   kable_classic()
 
+```
+
+```{r table-bar-degree, fig.cap = "Average degree, by bar attendance.", echo = F}
 gonnet_df2 %>% 
-  filter(!is.na(gender)) %>%
+  filter(!(gender == "NA")) %>%
   group_by(attended_bar) %>%
-  summarize(average_degree = mean(degree)) %>%
+  summarize(average_degree = mean(degree) %>% round(3)) %>% 
   kbl(col.names = c("Attended Bar", "Mean Degree")) %>%
   kable_classic()
+
+
 ```
 
 \doublespacing
@@ -228,30 +251,6 @@ The analysis gave that the overall average degree for the directed graph is appr
 
 The implication of this observation is two-fold. For one, rather than most individuals in the network having many sexual partners, the implication of how degree is distributed in this network is that most individuals have as few as one, but there is a minority of individuals (of both genders) who named more. 
 
-
-\singlespacing
-
-```{r levene-test-for-equal-variance, echo = F}
-# levene test for equality of variances
-# H0: the variance in degree between the two genders is equal
-degree_gender$gender <- as.factor(degree_gender$gender)
-  
-leveneTest(degree ~ gender, 
-           data = degree_gender)
-# p-value > 0.05, so we fail to reject H0, conclude the variances are equal
-```
-
-```{r student-t-test-for-degree}
-# Student's t-test comparing the mean degree of men and women
-# H0: mu_x - mu_y = 0
-t.test(x = degree_m, 
-       y = degree_f,
-       var.equal = T, alternative = "two.sided")
-# p-value = 0.5232 > 0.05, we fail to reject H0
-```
-
-\doublespacing
-
 ### Eigenvector Centrality
 
 Eigenvector centrality is calculated both as a function of a node's degree but also as a function of the degree of the nodes it is connected to. In other words, a node with a high eigenvector centrality is well-connected to nodes that are themselves well-connected. 
@@ -259,54 +258,36 @@ Eigenvector centrality is calculated both as a function of a node's degree but a
 ### Load Centrality
 
 ### Information Centrality
-
-
-
-
-
-
-
-
-
-
-
-
-
 \singlespacing
 
-```{r bar-attendance-degree}
-# boxplot comparing distribution of degree between bar (not)-attended
-ggplot(gonnet_df2 %>% filter(!(nodes %in% c("b", "x", "x2"))), 
-       aes(x = attended_bar, degree)) + 
-  geom_boxplot() + theme_bw()
-
-# average degree among bar attendees
-degree_bar <- gonnet_df2 %>% 
-  select(nodes, attended_bar, degree) %>%
-  filter(!(nodes %in% c("b", "x2", "x"))) %>%
-  filter(attended_bar == TRUE)
-
-# average degree among non-bar attendees
-degree_nobar <- gonnet_df2 %>% 
-  select(nodes, attended_bar, degree) %>%
-  filter(!(nodes %in% c("b", "x2", "x"))) %>%
-  filter(attended_bar == FALSE)
-
+```{r t-test-bar-degree}
 # sample sizes are unequal, so we cannot assume equal variance
 # try two-sided Welch's t.test
 # H0: mu_x - mu_y = 0
-t.test(x = degree_bar$degree,
-       y = degree_nobar$degree,
-       var.equal = FALSE, alternative = "two.sided")
+
+degree_bar <- gonnet_df2 %>% 
+  filter(nodes != "b") %>%
+  filter(attended_bar == TRUE) %>%
+  select(degree) %>% unlist()
+
+degree_nobar <- gonnet_df2 %>%
+  filter(nodes != "b") %>%
+  filter(attended_bar == FALSE) %>%
+  select(degree) %>% unlist()
+
+t.test(x = degree_bar,
+       y = degree_nobar,
+       var.equal = FALSE, 
+       alternative = "two.sided")
 # p-value < 0.05, reject H0
-# conclude the difference in mean degree is not equal to zero
+# conclude the difference in mean degree between the bar/non-bar group is not equal to zero
 ```
 
 
-```{r gplot-degree, echo = F}
+```{r gplot-degree, echo = F, fig.cap = "Gonorrhea network, sized by degree."}
 # normalizing the degree of bar because of course it has a high degree
 degree_m <- cen$degree + 1
-degree_m[1] <- 1
+degree_m[1] <- 3
 
 set.seed(10)
 
@@ -314,8 +295,8 @@ set.seed(10)
 gplot(gonnet, 
       vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
-      vertex.cex = degree_m,
-      coord = org_coord)
+      vertex.cex = scale(degree_m) + 2,
+      coord = org_coord, usearrows = F)
 # legend for gender
 legend("topleft",
        legend = c("yes", "no"),
@@ -327,13 +308,12 @@ legend("topright",
        col = c("black"),
        fill = F, border = "white", pch = c(0, 2),
        title = "Gender", bty = "n")
-title("Gonorrhea network, sized by degree")
 ```
 
 
 ## Principal Component Analysis
 
-```{r gplot- centralities}
+```{r gplot- centralities, include = F}
 # extracting the centralities that were important based on the PCA
 centrality_eigen <- centralities$`eigenvector centralities`
 centrality_load <- centralities$`Load Centrality`
@@ -343,19 +323,19 @@ centrality_shortest <- centralities$`Shortest-Paths Betweenness Centrality`
 centrality_info <- centralities$`Information Centrality`
 ```
 
-```{r gplot-size-eigenvector-centrality, echo = F}
+```{r gplot-size-eigenvector-centrality, echo = F, fig.cap = "Gonorrhea network, sized by eigenvector centrality."}
 set.seed(10)
 
-centrality_degree[1] <- 1
+centrality_eigen[1] <- 0.01
 gplot(gonnet, vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
-      vertex.cex = centrality_info %>% scale(),
+      vertex.cex = scale(centrality_eigen) + 2,
       # displaylabels = T, label.cex = 0.6, label.pos = 2,
       boxed.labels = F, pad = 2,
-      coord = org_coord)
+      coord = org_coord, usearrows = F)
 ```
 
-```{r find-best-cluster-number, echo = F}
+```{r find-best-cluster-number, echo = F, eval = F}
 # library(factoextra) is loaded
 fviz_nbclust(gonnet, kmeans, method = "wss", k.max = 30)
 
@@ -364,7 +344,7 @@ gap_stat <- clusGap(gonnet, FUN = kmeans, nstart = 25, K.max = 30, B = 50)
 fviz_gap_stat(gap_stat)
 ```
 
-```{r kmeans-clustering}
+```{r kmeans-clustering, eval = F}
 km <- kmeans(gonnet, centers = 21, nstart = 25)
 
 # fviz_cluster(km, data = gonnet_nob)
@@ -407,7 +387,7 @@ title("Block sociogram")
 ```
 
 
-```{r agnes-hclust, echo = F}
+```{r agnes-hclust, echo = F, eval = F}
 set.seed(10)
 par(mfrow = c(1,1))
 #define linkage methods
@@ -437,7 +417,7 @@ for (i in 1:4) {
 ```
 
 
-```{r p-value-hierarchical-clustering, cache = T}
+```{r p-value-hierarchical-clustering, cache = T, eval = F}
 fit <- 
   pvclust(gonnet, 
   method.hclust = "single",
@@ -447,12 +427,12 @@ fit <-
   nboot = 1000) 
 ```
 
-```{r dynamic-tree-cut}
+```{r dynamic-tree-cut, eval = F}
 fit_hclust <- fit$hclust
 fit_hclust %>% cutreeDynamicTree(deepSplit = F)
 ```
 
-```{r plot-dendrogram, echo = F}
+```{r plot-dendrogram, echo = F, eval = F}
 par(mfrow = c(1,1))
 plot(fit, hang = -1, cex = 0.5)
 pvrect(fit, alpha = 0.95)
@@ -460,7 +440,7 @@ pvrect(fit, alpha = 0.95)
 
 
 
-```{r blockmodel, echo = F}
+```{r blockmodel, echo = F, eval = F}
 set.seed(10)
 # if pchisq > 0.05, cluster is significant
 pp <- pvpick(fit)
@@ -550,16 +530,6 @@ title("Graph, shaded by fast-greedy community")
 # labeling only the original bar patrons
 ```
 
-
-```{r kcores, eval = F}
-par(mfrow = c(1,1))
-set.seed(10)
-edgelist <- as.edgelist(gonnet, n = dim(gonnet)[1])
-plot_kcores(edgelist, sym = F, mode = "digraph", 
-            coord = org_coord,
-            cmode = "degree")
-```
-
 \doublespacing
 
 
@@ -578,49 +548,47 @@ This equation implies that there is a probability distribution of all possible n
 
 \singlespacing
 
-```{r ergm-data}
-gonnet.degreedist <- table(sna::degree(gonnet, cmode = "degree"))
+```{r ergm-data, include = F}
+gonnet.degreedist <- table(sna::degree(gonnet))
 gonnet.degreedist
 
 # creating a network object, symmetric
-gonnet_net <- network(gonnet, directed = TRUE) 
-gonnet_sym_net <- network(gonnet, directed = FALSE)
+gonnet_net <- network(gonnet, directed = FALSE) 
 # adding bar attendance on graphs
 network::set.vertex.attribute(gonnet_net, 'bar', 
                              gonnet_df2$attended_bar)
-network::set.vertex.attribute(gonnet_sym_net, 'bar', 
-                             gonnet_df2$attended_bar)
 # adding gender attribute on graph
+gonnet_df2 <- gonnet_df2 %>%
+  mutate(gender = ifelse(is.na(gender), yes = "U", no = gender))
 network::set.vertex.attribute(gonnet_net, 'gender', gonnet_df2$gender)
-network::set.vertex.attribute(gonnet_sym_net, 'gender', gonnet_df2$gender)
-
-# degree for symmetric network
-gonnet_sym_net %>% sna::degree() %>% table()
 ```
 
 
-```{r ergm}
+```{r ergm, echo = F, cache = T}
 set.seed(55)
+
+# nodematch , uniform homophily, differential hom
+
 # library(ergm) is loaded
 # simple model
 ergm_model1 <- ergm(gonnet_net ~ edges)
-
+summary(ergm_model1)
 # homophily
 # do bar patrons hook up with one another?
-ergm_model2 <- ergm(gonnet_sym_net ~ edges + nodematch("bar"))
+ergm_model2 <- ergm(gonnet_net ~ edges + nodematch("bar"))
 summary(ergm_model2)
 # goodness of fit test
 # closer the p-value is to 1 the better, both are very close to 1
 model2_gof <- gof(ergm_model2, GOF = ~model)
 model2_gof
 plot(model2_gof)
+
 # likelihood ratio test to compare model1 to model 2
 # H0: the simpler model is preferred
 anova(ergm_model1, ergm_model2)
 
 # using symmetric model
-# 
-ergm_model3 <- ergm(gonnet_sym_net ~ edges + degree(d = c(2:3)))
+ergm_model3 <- ergm(gonnet_net ~ edges + degree(d = c(2:3)))
 summary(ergm_model3)
 # diagnostics
 mcmc.diagnostics(ergm_model3)
@@ -628,15 +596,8 @@ model3_gof <- gof(ergm_model3, GOF = ~model)
 model3_gof
 plot(model3_gof)
 
-# testing bar attendance effect on degree
-ergm_model4 <- ergm(gonnet_net ~ edges + nodeocov("bar"))
-summary(ergm_model4)
-model4_gof <- gof(ergm_model4, GOF = ~model)
-model4_gof
-plot(model4_gof)
-
 # nodecov 
-ergm_model5 <- ergm(gonnet_sym_net ~ edges + nodecov("bar"))
+ergm_model5 <- ergm(gonnet_net ~ edges + nodecov("bar"))
 summary(ergm_model5)
 model5_gof <- gof(ergm_model5, GOD = ~model)
 model5_gof
@@ -648,6 +609,16 @@ summary(ergm_model6)
 model6_gof <- gof(ergm_model6, GOF = ~model)
 model6_gof
 plot(model6_gof)
+
+# adding all these terms together
+ergm_model7 <- ergm(gonnet_net ~ edges + nodemix("gender"))
+summary(ergm_model7)
+model7_gof <- gof(ergm_model7, GOF = ~model)
+model7_gof
+plot(model7_gof)
+
+
+
 ```
 
 

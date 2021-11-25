@@ -25,3 +25,12 @@ cluster
 netdiffuseR
 dendextend
 dynamicTreeCut
+kableExtra
+knitr
+ergm
+coda
+networkDynamic
+tergm
+ergm.count
+tsna
+statnet
