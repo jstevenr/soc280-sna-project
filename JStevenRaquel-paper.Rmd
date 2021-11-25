@@ -35,6 +35,7 @@ library(knitr)
 library(ergm)
 library(coda)
 library(statnet)
+library(latticeExtra)
 source(here::here("functions.R"))
 ```
 
@@ -563,6 +564,23 @@ gonnet_df2 <- gonnet_df2 %>%
 network::set.vertex.attribute(gonnet_net, 'gender', gonnet_df2$gender)
 ```
 
+```{r get-aic, echo = F}
+# get aic function
+get_from_summary <- function(ergm_model, object) {
+    
+  sum <- summary(ergm_model)  
+  
+  if (object == "aic") {
+    y <- sum$aic[1]
+  }
+  else if (object == "formula") {
+    y <- sum$formula
+  }
+  
+  return(y)
+}
+
+```
 
 ```{r ergm, echo = F, cache = T}
 set.seed(55)
@@ -596,6 +614,14 @@ model3_gof <- gof(ergm_model3, GOF = ~model)
 model3_gof
 plot(model3_gof)
 
+# heterophily of gender
+# i.e. do males connect to females and vice versa
+ergm_model4 <- ergm(gonnet_net ~ edges + nodemix("gender"))
+summary(ergm_model4)
+model4_gof <- gof(ergm_model4, GOF = ~model)
+model4_gof
+plot(model4_gof)
+
 # nodecov 
 ergm_model5 <- ergm(gonnet_net ~ edges + nodecov("bar"))
 summary(ergm_model5)
@@ -609,18 +635,41 @@ summary(ergm_model6)
 model6_gof <- gof(ergm_model6, GOF = ~model)
 model6_gof
 plot(model6_gof)
+```
 
-# adding all these terms together
-ergm_model7 <- ergm(gonnet_net ~ edges + nodemix("gender"))
+
+```{r ergm-model-fitting, echo = F, cache = T}
+set.seed(55)
+ergm_model7 <- ergm(gonnet_net ~ 
+                      edges + nodemix("gender") + degree(d = c(2:3)) + nodematch("bar"))
 summary(ergm_model7)
 model7_gof <- gof(ergm_model7, GOF = ~model)
 model7_gof
 plot(model7_gof)
 
 
-
+mcmc.diagnostics(ergm_model7)
 ```
 
+
+```{r table-model-comparison, echo = F}
+model_list <- list(ergm_model1, ergm_model2, ergm_model3,
+                   ergm_model4, ergm_model5, ergm_model6)
+
+aics <- sapply(model_list, FUN = get_from_summary, object = "aic")
+formulas <- sapply(model_list, FUN = get_from_summary, object = "formula")
+
+df <- matrix(data = c(formulas, aics),
+              nrow = length(aics),
+              ncol = 2) %>% 
+  as.data.frame() %>%
+  rename(formula = V1, aic = V2)
+
+df %>% 
+  kbl(caption = "Table of Akaike Information Criteria for each ERGM model") %>% 
+  kable_classic()  
+
+```
 
 \newpage
 
