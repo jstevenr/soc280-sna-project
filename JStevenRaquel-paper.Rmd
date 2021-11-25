@@ -85,29 +85,24 @@ Wasserman and Faust (1994) define "cutpoints" and "bridges" as nodes and ties re
 ```{r data-prep, echo = F}
 # data is loaded as 'gonnet'
 nodes <- rownames(gonnet)
+# symmetrized graph (undirected)
+gonnet <- symmetrize(gonnet, rule = "weak")
+rownames(gonnet) <- nodes
 colnames(gonnet) <- nodes
 
-# symmetrized graph (undirected)
-gonnet_sym <- symmetrize(gonnet, rule = "weak")
-
 gonnet_df <- data.frame(nodes) %>%
-  mutate(gender = ifelse(grepl("m", nodes), yes = "m", no = NA)) %>%
-  mutate(gender = ifelse(grepl("f", nodes), yes = "f", no = gender)) %>%
-  mutate(gender_lty = ifelse(gender == "m", yes = 4, no = 3)) %>%
-  mutate(gender_lty = ifelse(gender == "f", yes = 3, no = gender_lty)) %>%
-  mutate(gender_lty = ifelse(gender %in% c("m", "f"), yes = gender_lty, no = 50)
+  dplyr::mutate(gender = ifelse(grepl("m", nodes), yes = "m", no = NA)) %>%
+  dplyr::mutate(gender = ifelse(grepl("f", nodes), yes = "f", no = gender)) %>%
+  dplyr::mutate(gender_lty = ifelse(gender == "m", yes = 4, no = 3)) %>%
+  dplyr::mutate(gender_lty = ifelse(gender == "f", yes = 3, no = gender_lty)) %>%
+  dplyr::mutate(gender_lty = ifelse(gender %in% c("m", "f"), yes = gender_lty, no = 50)
          ) %>%
-  mutate(attended_bar = gonnet["b",] == 1) %>%
-  mutate(col = ifelse(attended_bar == T, "tomato1", "grey"))
+  dplyr::mutate(attended_bar = (gonnet["b",] == 1)) %>%
+  dplyr::mutate(col = ifelse(attended_bar == T, "tomato1", "grey"))
 
 
 gonnet_df$col[!(gonnet_df$gender %in% c("m", "f"))] <- "blue"
 gonnet_df$col[gonnet_df$nodes == "b"] <- "tomato1"
-```
-
-```{r fig-data-summary}
-table(component.dist(gonnet)$csize)
-
 ```
 
 ```{r sociogram, fig.cap = "Sociogram of the gonorrhea network."}
@@ -117,7 +112,7 @@ org_coord <-
   gplot(gonnet, vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
       displaylabels = T, label.cex = 0.6,
-      boxed.labels = F, pad = 2, usearrows = T,
+      boxed.labels = F, pad = 2, usearrows = F,
       vertex.cex = 1.25)
 # legend for gender
 legend("topleft",
@@ -147,16 +142,6 @@ The first approach in the analysis was to look at the _centrality measures_ of e
 
 \singlespacing
 
-```{r centrality-correlation, echo = F}
-cen <- get_centralities(gonnet, "directed")
-
-# correlations between centrality measures
-centrality_correlations(gonnet, cen)
-
-cen_sym <- get_centralities(gonnet_sym, "undirected")
-centrality_correlations(gonnet_sym, cen_sym)
-```
-
 
 ```{r centralities_more, echo = F}
 # creating igraph object
@@ -183,102 +168,84 @@ Different measures of centrality depend on functions of one of these aspects and
 
 ### Degree Centrality
 
-Degree centrality can be measured in multiple ways; the first is _indegree_ which is a count of the number of incoming ties that a node has. The second is _outdegree_ which conversely is the count of the number of outgoing ties that a node has. 
+Degree centrality can be measured in multiple ways; the first is _indegree_ which is a count of the number of incoming ties that a node has. The second is _degree_ which conversely is the count of the number of outgoing ties that a node has. 
 
-The vast majority of nodes in the directed network have an indegree of 1, i.e. only one individual nominated that person as a sexual partner when interviewed. The outdegree was _at least_ 1 for most nodes in the network, but could be zero for nodes on the very outside of the network who did not name any sexual partners. 
+The vast majority of nodes in the directed network have an indegree of 1, i.e. only one individual nominated that person as a sexual partner when interviewed. The degree was _at least_ 1 for most nodes in the network, but could be zero for nodes on the very outside of the network who did not name any sexual partners. 
 
 The overall degree of a node can be taken as the total amount of ties a node has, either incoming or outgoing, but in the case of an undirected graph, these are one and the same.
 
-#### Outdegree Centrality
+#### degree Centrality
 
 \singlespacing
 
-```{r figure-male-female-outdegree}
-gonnet_df2 <- cbind(gonnet_df, cen) %>% select(-id)
+```{r figure-male-female-degree}
+# we care about 
+# closeness centrality, katz centrality, eigenvector centrality, avg distance, degree centrality, and information centrality
 
-# boxplot comparing outdegree
-outdegree_gender <- gonnet_df2 %>% 
-  select(nodes, gender, outdegree) %>% 
+cen <- data.frame(closeness = centralities$`Closeness Centrality (Freeman)`,
+                  katz = centralities$`Katz Centrality (Katz Status Index)`,
+                  eigenvector = centralities$`eigenvector centralities`,
+                  avg_distance = centralities$`Average Distance`,
+                  degree = centralities$`Degree Centrality`,
+                  information = centralities$`Information Centrality`)
+
+gonnet_df2 <- cbind(gonnet_df, cen)
+
+# boxplot comparing degree
+degree_gender <- gonnet_df2 %>% 
+  select(nodes, gender, degree) %>% 
   drop_na()
 
-# boxplot of outdegree by gender
-ggplot(outdegree_gender, aes(x=gender, y=outdegree)) + 
-  geom_boxplot()
+# boxplot of degree by gender
+ggplot(degree_gender, aes(x=gender, y=degree)) + 
+  geom_boxplot() +
+  ggtitle("Boxplot of Degree, Males vs Females") +
+  theme_bw()
 ```
 
-```{r table-male-female-outdegree, echo = F}
-# average outdegree overall
-mean_overall_outdegree <- gonnet_df2$outdegree %>% mean()
+```{r table-male-female-degree, echo = F}
+# average degree overall
+mean_overall_degree <- gonnet_df2$degree %>% mean()
 
-# average outdegree among males in network, overall
-outdegree_m <- gonnet_df2 %>%
-  select(nodes, gender, outdegree) %>%
-  filter(gender == "m") %>%
-  select(outdegree) %>% 
-  unlist()
-mean_male_outdegree <- outdegree_m %>% mean()
+gonnet_df2 %>% 
+  filter(!is.na(gender)) %>%
+  group_by(gender) %>%
+  summarize(average_degree = mean(degree)) %>% 
+  kbl(col.names = c("Gender", "Mean Degree")) %>%
+  kable_classic()
 
-# mean male outdegree that excludes nodes with zero outdegree
-mean_male_outdegree_nonzero <- 
-  gonnet_df2 %>%
-  select(nodes, gender, outdegree) %>%
-  filter(gender == "m" & outdegree != 0) %>%
-  select(outdegree) %>%
-  unlist() %>% mean()
-
-# average outdegree among females
-outdegree_f <- gonnet_df2 %>% 
-  select(nodes, gender, outdegree) %>%
-  filter(gender == "f") %>% 
-  select(outdegree) %>%
-  unlist()
-mean_female_outdegree <- outdegree_f %>% mean()
-
-# mean female outdegree that excludes nodes with zero outdegree
-mean_female_outdegree_nonzero <- gonnet_df2 %>%
-  select(nodes, gender, outdegree) %>%
-  filter(gender == "f" & outdegree != 0) %>%
-  select(outdegree) %>%
-  unlist() %>% mean()
-
-mat <- matrix(data = c(mean_male_outdegree, mean_male_outdegree_nonzero,
-                       mean_female_outdegree, mean_female_outdegree_nonzero),
-              nrow = 2,
-              ncol = 2,
-              dimnames = list(c("Male", "Female"),
-                              c("With Zeroes", "Without Zeroes")))
-
-# table
-kbl(mat) %>% 
-  kable_classic() %>%
-  add_header_above(c("Gender" = 1, "Mean Outdegree" = 2))
-  
+gonnet_df2 %>% 
+  filter(!is.na(gender)) %>%
+  group_by(attended_bar) %>%
+  summarize(average_degree = mean(degree)) %>%
+  kbl(col.names = c("Attended Bar", "Mean Degree")) %>%
+  kable_classic()
 ```
 
 \doublespacing
 
-The analysis gave that the overall average outdegree for the directed graph is approximately 1, implying that on average individuals named one sexual partner. It's important to note that many outer edges have an outdegree of 0, which skews down the mean calculation somewhat. 
+The analysis gave that the overall average degree for the directed graph is approximately 1, implying that on average individuals named one sexual partner. It's important to note that many outer edges have an degree of 0, which skews down the mean calculation somewhat. 
 
-The implication of this observation is two-fold. For one, rather than most individuals in the network having many sexual partners, the implication of how outdegree is distributed in this network is that most individuals have as few as one, but there is a minority of individuals (of both genders) who named more. 
+The implication of this observation is two-fold. For one, rather than most individuals in the network having many sexual partners, the implication of how degree is distributed in this network is that most individuals have as few as one, but there is a minority of individuals (of both genders) who named more. 
 
 
 \singlespacing
 
 ```{r levene-test-for-equal-variance, echo = F}
 # levene test for equality of variances
-# H0: the variance in outdegree between the two genders is equal
-outdegree_gender$gender <- as.factor(outdegree_gender$gender)
+# H0: the variance in degree between the two genders is equal
+degree_gender$gender <- as.factor(degree_gender$gender)
   
-leveneTest(outdegree ~ gender, 
-           data = outdegree_gender)
+leveneTest(degree ~ gender, 
+           data = degree_gender)
 # p-value > 0.05, so we fail to reject H0, conclude the variances are equal
 ```
 
-```{r student-t-test-for-outdegree}
-# Student's t-test comparing the mean outdegree of men and women
+```{r student-t-test-for-degree}
+# Student's t-test comparing the mean degree of men and women
 # H0: mu_x - mu_y = 0
-t.test(x = outdegree_m, 
-       y = outdegree_f,
+t.test(x = degree_m, 
+       y = degree_f,
        var.equal = T, alternative = "two.sided")
 # p-value = 0.5232 > 0.05, we fail to reject H0
 ```
@@ -307,47 +274,47 @@ Eigenvector centrality is calculated both as a function of a node's degree but a
 
 \singlespacing
 
-```{r bar-attendance-outdegree}
-# boxplot comparing distribution of outdegree between bar (not)-attended
+```{r bar-attendance-degree}
+# boxplot comparing distribution of degree between bar (not)-attended
 ggplot(gonnet_df2 %>% filter(!(nodes %in% c("b", "x", "x2"))), 
-       aes(x = attended_bar, outdegree)) + 
+       aes(x = attended_bar, degree)) + 
   geom_boxplot() + theme_bw()
 
-# average outdegree among bar attendees
-outdegree_bar <- gonnet_df2 %>% 
-  select(nodes, attended_bar, outdegree) %>%
+# average degree among bar attendees
+degree_bar <- gonnet_df2 %>% 
+  select(nodes, attended_bar, degree) %>%
   filter(!(nodes %in% c("b", "x2", "x"))) %>%
   filter(attended_bar == TRUE)
 
-# average outdegree among non-bar attendees
-outdegree_nobar <- gonnet_df2 %>% 
-  select(nodes, attended_bar, outdegree) %>%
+# average degree among non-bar attendees
+degree_nobar <- gonnet_df2 %>% 
+  select(nodes, attended_bar, degree) %>%
   filter(!(nodes %in% c("b", "x2", "x"))) %>%
   filter(attended_bar == FALSE)
 
 # sample sizes are unequal, so we cannot assume equal variance
 # try two-sided Welch's t.test
 # H0: mu_x - mu_y = 0
-t.test(x = outdegree_bar$outdegree,
-       y = outdegree_nobar$outdegree,
+t.test(x = degree_bar$degree,
+       y = degree_nobar$degree,
        var.equal = FALSE, alternative = "two.sided")
 # p-value < 0.05, reject H0
-# conclude the difference in mean outdegree is not equal to zero
+# conclude the difference in mean degree is not equal to zero
 ```
 
 
-```{r gplot-outdegree, echo = F}
-# normalizing the outdegree of bar because of course it has a high outdegree
-outdegree_m <- cen$outdegree + 1
-outdegree_m[1] <- 1
+```{r gplot-degree, echo = F}
+# normalizing the degree of bar because of course it has a high degree
+degree_m <- cen$degree + 1
+degree_m[1] <- 1
 
 set.seed(10)
 
-# plotting based on outdegree
+# plotting based on degree
 gplot(gonnet, 
       vertex.col = gonnet_df$col,
       vertex.sides = gonnet_df$gender_lty,
-      vertex.cex = outdegree_m,
+      vertex.cex = degree_m,
       coord = org_coord)
 # legend for gender
 legend("topleft",
@@ -360,7 +327,7 @@ legend("topright",
        col = c("black"),
        fill = F, border = "white", pch = c(0, 2),
        title = "Gender", bty = "n")
-title("Gonorrhea network, sized by outdegree")
+title("Gonorrhea network, sized by degree")
 ```
 
 
@@ -590,7 +557,7 @@ set.seed(10)
 edgelist <- as.edgelist(gonnet, n = dim(gonnet)[1])
 plot_kcores(edgelist, sym = F, mode = "digraph", 
             coord = org_coord,
-            cmode = "outdegree")
+            cmode = "degree")
 ```
 
 \doublespacing
@@ -612,7 +579,7 @@ This equation implies that there is a probability distribution of all possible n
 \singlespacing
 
 ```{r ergm-data}
-gonnet.degreedist <- table(sna::degree(gonnet, cmode = "outdegree"))
+gonnet.degreedist <- table(sna::degree(gonnet, cmode = "degree"))
 gonnet.degreedist
 
 # creating a network object, symmetric
@@ -661,7 +628,7 @@ model3_gof <- gof(ergm_model3, GOF = ~model)
 model3_gof
 plot(model3_gof)
 
-# testing bar attendance effect on outdegree
+# testing bar attendance effect on degree
 ergm_model4 <- ergm(gonnet_net ~ edges + nodeocov("bar"))
 summary(ergm_model4)
 model4_gof <- gof(ergm_model4, GOF = ~model)
