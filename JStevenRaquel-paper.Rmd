@@ -36,6 +36,11 @@ library(ergm)
 library(coda)
 library(statnet)
 library(latticeExtra)
+library(GGally)
+library(ggnet)
+library(foreign)
+library(ergm.userterms)
+library(Matrix)
 source(here::here("functions.R"))
 ```
 
@@ -100,21 +105,89 @@ colnames(gonnet) <- nodes
 
 # creating data.frame with traits
 gonnet_df <- data.frame(nodes) %>%
-  dplyr::mutate(gender = ifelse(grepl("m", nodes), yes = "m", no = NA)) %>%
-  dplyr::mutate(gender = ifelse(grepl("f", nodes), yes = "f", no = gender)) %>%
-  dplyr::mutate(gender_lty = ifelse(gender == "m", yes = 4, no = 3)) %>%
-  dplyr::mutate(gender_lty = ifelse(gender == "f", yes = 3, no = gender_lty)) %>%
-  dplyr::mutate(gender_lty = ifelse(gender %in% c("m", "f"), yes = gender_lty, no = 50)) %>%
+  dplyr::mutate(gender = ifelse(grepl("m", nodes), yes = "M", no = NA)) %>%
+  dplyr::mutate(gender = ifelse(grepl("f", nodes), yes = "F", no = gender)) %>%
+  dplyr::mutate(gender_lty = ifelse(gender == "M", yes = 4, no = 3)) %>%
+  dplyr::mutate(gender_lty = ifelse(gender == "F", yes = 3, no = gender_lty)) %>%
+  dplyr::mutate(gender_lty = ifelse(gender %in% c("M", "F"), yes = gender_lty, no = 50)) %>%
   dplyr::mutate(attended_bar = (gonnet["b",] == 1)) %>%
   dplyr::mutate(col = ifelse(attended_bar == T, "tomato1", "grey"))
 
 
-gonnet_df$col[!(gonnet_df$gender %in% c("m", "f"))] <- "blue"
+gonnet_df$col[!(gonnet_df$gender %in% c("M", "F"))] <- "blue"
 gonnet_df$col[gonnet_df$nodes == "b"] <- "tomato1"
 gonnet_df$gender[gonnet_df$nodes == "b"] <- "NA"
+
+# we care about 
+# closeness centrality, katz centrality, eigenvector centrality, avg distance, degree centrality, and information centrality
+
+cen <- data.frame(closeness = centralities$`Closeness Centrality (Freeman)`,
+                  katz = centralities$`Katz Centrality (Katz Status Index)`,
+                  eigenvector = centralities$`eigenvector centralities`,
+                  avg_distance = centralities$`Average Distance`,
+                  degree = centralities$`Degree Centrality`,
+                  information = centralities$`Information Centrality`)
+
+gonnet_df2 <- cbind(gonnet_df, cen)
+
+# dropping bar object from this network
+gonnet_nobar <- gonnet[-1,]
+gonnet_nobar <- gonnet_nobar[,-1]
+
+# creating network object
+gonnet_net_nobar <- network(gonnet_nobar, directed = F)
+
+# adding bar attendance on graphs
+network::set.vertex.attribute(gonnet_net_nobar, 'bar', 
+                             gonnet_df2$attended_bar[-1])
+# adding gender to the graph
+network::set.vertex.attribute(gonnet_net_nobar, 'gender', gonnet_df2$gender[-1])
+network::set.vertex.attribute(gonnet_net_nobar, 'degree', cen$degree[-1])
 ```
 
-```{r sociogram, fig.cap = "Sociogram of the gonorrhea network.", echo = F}
+```{r network-objects, include = F}
+
+# creating a network object of the two-mode network with the bar
+gonnet_net_bar <- network(gonnet, directed = F)
+
+# adding gender to the graph
+network::set.vertex.attribute(gonnet_net_bar, 'gender', gonnet_df2$gender)
+network::set.vertex.attribute(gonnet_net_bar, 'degree', cen$degree)
+
+# adding a linetype attribute so that the edges to the bar are dashed lines
+edgelist <- as.matrix(gonnet_net_bar, matrix.type="edgelist")
+network::set.edge.attribute(gonnet_net_bar, "lty", 
+                            ifelse(edgelist[,2] == 1, 2, 1))
+
+```
+
+
+```{r sociogram-ggnet2-bar, echo = F, fig.cap = "The two-mode network with bar as a node."}
+set.seed(55)
+ggnet2(gonnet_net_bar,
+       color = "gender", 
+       palette = c("M" = "lightblue", "F" = "salmon", "BAR" = "grey"),
+       mode = "fruchtermanreingold",
+       label = TRUE,
+       edge.lty = lty)
+
+```
+
+
+```{r sociogram-ggnet2-nobar, echo = F, fig.cap = "The one-mode network without the bar as a node."}
+set.seed(55)
+# GGally is loaded
+ggnet2(gonnet_net, 
+       color = "gender", palette = c("M" = "lightblue", "F" = "salmon"), 
+       shape = "bar", 
+       mode = "fruchtermanreingold", 
+       label = TRUE)
+
+```
+
+
+
+```{r sociogram-sna, fig.cap = "Sociogram of the gonorrhea network.", echo = F}
 # data is loaded as gonnet
 par(mfrow = c(1,1))
 set.seed(10)
@@ -188,19 +261,7 @@ The overall degree of a node can be taken as the total amount of ties a node has
 
 \singlespacing
 
-```{r adding-centralities, include = F}
-# we care about 
-# closeness centrality, katz centrality, eigenvector centrality, avg distance, degree centrality, and information centrality
 
-cen <- data.frame(closeness = centralities$`Closeness Centrality (Freeman)`,
-                  katz = centralities$`Katz Centrality (Katz Status Index)`,
-                  eigenvector = centralities$`eigenvector centralities`,
-                  avg_distance = centralities$`Average Distance`,
-                  degree = centralities$`Degree Centrality`,
-                  information = centralities$`Information Centrality`)
-
-gonnet_df2 <- cbind(gonnet_df, cen)
-```
 
 ```{r figure-bar-degree, fig.cap = "Distribution of degree, by bar attendance.", echo=FALSE}
 # boxplot of degree by bar attendance
@@ -260,30 +321,6 @@ Eigenvector centrality is calculated both as a function of a node's degree but a
 
 ### Information Centrality
 \singlespacing
-
-```{r t-test-bar-degree}
-# sample sizes are unequal, so we cannot assume equal variance
-# try two-sided Welch's t.test
-# H0: mu_x - mu_y = 0
-
-degree_bar <- gonnet_df2 %>% 
-  filter(nodes != "b") %>%
-  filter(attended_bar == TRUE) %>%
-  select(degree) %>% unlist()
-
-degree_nobar <- gonnet_df2 %>%
-  filter(nodes != "b") %>%
-  filter(attended_bar == FALSE) %>%
-  select(degree) %>% unlist()
-
-t.test(x = degree_bar,
-       y = degree_nobar,
-       var.equal = FALSE, 
-       alternative = "two.sided")
-# p-value < 0.05, reject H0
-# conclude the difference in mean degree between the bar/non-bar group is not equal to zero
-```
-
 
 ```{r gplot-degree, echo = F, fig.cap = "Gonorrhea network, sized by degree."}
 # normalizing the degree of bar because of course it has a high degree
@@ -553,15 +590,6 @@ This equation implies that there is a probability distribution of all possible n
 gonnet.degreedist <- table(sna::degree(gonnet))
 gonnet.degreedist
 
-# creating a network object, symmetric
-gonnet_net <- network(gonnet, directed = FALSE) 
-# adding bar attendance on graphs
-network::set.vertex.attribute(gonnet_net, 'bar', 
-                             gonnet_df2$attended_bar)
-# adding gender attribute on graph
-gonnet_df2 <- gonnet_df2 %>%
-  mutate(gender = ifelse(is.na(gender), yes = "U", no = gender))
-network::set.vertex.attribute(gonnet_net, 'gender', gonnet_df2$gender)
 ```
 
 ```{r get-aic, echo = F}
