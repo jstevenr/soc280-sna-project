@@ -37,7 +37,6 @@ library(coda)
 library(statnet)
 library(latticeExtra)
 library(GGally)
-library(ggnet)
 library(foreign)
 library(ergm.userterms)
 library(Matrix)
@@ -118,6 +117,17 @@ gonnet_df$col[!(gonnet_df$gender %in% c("M", "F"))] <- "blue"
 gonnet_df$col[gonnet_df$nodes == "b"] <- "tomato1"
 gonnet_df$gender[gonnet_df$nodes == "b"] <- "NA"
 
+# creating igraph object
+gonnet_ig <- graph_from_adjacency_matrix(gonnet)
+
+(pc <- proper_centralities(gonnet_ig)) %>% 
+  capture.output() %>%
+  invisible()
+
+centralities <- calculate_centralities(gonnet_ig, 
+                       include = pc[c(1, 4, 11, 16, 27, 
+                                      45, 8, 18, 31, 43, 3, 19)])
+
 # we care about 
 # closeness centrality, katz centrality, eigenvector centrality, avg distance, degree centrality, and information centrality
 
@@ -145,7 +155,7 @@ network::set.vertex.attribute(gonnet_net_nobar, 'gender', gonnet_df2$gender[-1])
 network::set.vertex.attribute(gonnet_net_nobar, 'degree', cen$degree[-1])
 ```
 
-```{r network-objects, include = F}
+```{r network-objects, echo = F}
 
 # creating a network object of the two-mode network with the bar
 gonnet_net_bar <- network(gonnet, directed = F)
@@ -166,10 +176,10 @@ network::set.edge.attribute(gonnet_net_bar, "lty",
 set.seed(55)
 ggnet2(gonnet_net_bar,
        color = "gender", 
-       palette = c("M" = "lightblue", "F" = "salmon", "BAR" = "grey"),
+       palette = c("M" = "lightblue", "F" = "salmon", "NA" = "grey"),
        mode = "fruchtermanreingold",
        label = TRUE,
-       edge.lty = lty)
+       edge.lty = "lty")
 
 ```
 
@@ -177,38 +187,12 @@ ggnet2(gonnet_net_bar,
 ```{r sociogram-ggnet2-nobar, echo = F, fig.cap = "The one-mode network without the bar as a node."}
 set.seed(55)
 # GGally is loaded
-ggnet2(gonnet_net, 
+ggnet2(gonnet_net_nobar, 
        color = "gender", palette = c("M" = "lightblue", "F" = "salmon"), 
        shape = "bar", 
        mode = "fruchtermanreingold", 
        label = TRUE)
 
-```
-
-
-
-```{r sociogram-sna, fig.cap = "Sociogram of the gonorrhea network.", echo = F}
-# data is loaded as gonnet
-par(mfrow = c(1,1))
-set.seed(10)
-org_coord <- 
-  gplot(gonnet, vertex.col = gonnet_df$col,
-      vertex.sides = gonnet_df$gender_lty,
-      displaylabels = T, label.cex = 0.6,
-      boxed.labels = F, pad = 2, usearrows = F,
-      vertex.cex = 1.25)
-# legend for gender
-legend("topleft",
-       legend = c("yes", "no"),
-       col = c("tomato1", "grey"),
-       fill = F, border = "white", pch = 19,
-       title = "Bar Attendance", bty = "n")
-legend("topright",
-       legend = c("m", "f"),
-       col = c("black"),
-       fill = F, border = "white", pch = c(0, 2),
-       title = "Gender", bty = "n")
-# legend for bar attendance
 ```
 
 \doublespacing
@@ -227,16 +211,7 @@ The first approach in the analysis was to look at the _centrality measures_ of e
 
 
 ```{r centralities_more, echo = F}
-# creating igraph object
-gonnet_ig <- graph_from_adjacency_matrix(gonnet)
 
-(pc <- proper_centralities(gonnet_ig)) %>% 
-  capture.output() %>%
-  invisible()
-
-centralities <- calculate_centralities(gonnet_ig, 
-                       include = pc[c(1, 4, 11, 16, 27, 
-                                      45, 8, 18, 31, 43, 3, 19)])
 
 # plot of different centralities' contributions via PCA
 pca_centralities(centralities)
@@ -330,22 +305,12 @@ degree_m[1] <- 3
 set.seed(10)
 
 # plotting based on degree
-gplot(gonnet, 
-      vertex.col = gonnet_df$col,
-      vertex.sides = gonnet_df$gender_lty,
-      vertex.cex = scale(degree_m) + 2,
-      coord = org_coord, usearrows = F)
-# legend for gender
-legend("topleft",
-       legend = c("yes", "no"),
-       col = c("tomato1", "grey"),
-       fill = F, border = "white", pch = 19,
-       title = "Bar Attendance", bty = "n")
-legend("topright",
-       legend = c("m", "f"),
-       col = c("black"),
-       fill = F, border = "white", pch = c(0, 2),
-       title = "Gender", bty = "n")
+ggnet2(gonnet_net_nobar, 
+       color = "gender", palette = c("M" = "lightblue", "F" = "salmon"), 
+       shape = "bar", 
+       mode = "fruchtermanreingold", 
+       size = "degree",
+       label = F)
 ```
 
 
