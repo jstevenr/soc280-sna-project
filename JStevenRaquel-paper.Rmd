@@ -29,14 +29,14 @@ library(factoextra) # for nbclust
 library(cluster) # more cluster analysis
 library(netdiffuseR)
 library(dendextend) # for appealing dendrograms
-library(dynamicTreeCut)
-library(kableExtra)
-library(knitr)
-library(ergm)
+library(dynamicTreeCut) # for cutting the dendrogram
+library(kableExtra) # nicer tables
+library(knitr) # kable
+library(ergm) # ERGMS
 library(coda)
 library(statnet)
 library(latticeExtra)
-library(GGally)
+library(GGally) # ggnet2 
 library(foreign)
 library(ergm.userterms)
 library(Matrix)
@@ -173,25 +173,27 @@ network::set.edge.attribute(gonnet_net_bar, "lty",
 
 
 ```{r sociogram-ggnet2-bar, echo = F, fig.cap = "The two-mode network with bar as a node."}
-set.seed(55)
+set.seed(61)
 ggnet2(gonnet_net_bar,
        color = "gender", 
        palette = c("M" = "lightblue", "F" = "salmon", "NA" = "grey"),
        mode = "fruchtermanreingold",
-       label = TRUE,
-       edge.lty = "lty")
+       label = F,
+       edge.lty = "lty", 
+       size = 5)
 
 ```
 
 
 ```{r sociogram-ggnet2-nobar, echo = F, fig.cap = "The one-mode network without the bar as a node."}
-set.seed(55)
+set.seed(61)
 # GGally is loaded
 ggnet2(gonnet_net_nobar, 
        color = "gender", palette = c("M" = "lightblue", "F" = "salmon"), 
        shape = "bar", 
        mode = "fruchtermanreingold", 
-       label = TRUE)
+       label = F,
+       size = 5)
 
 ```
 
@@ -326,7 +328,7 @@ centrality_shortest <- centralities$`Shortest-Paths Betweenness Centrality`
 centrality_info <- centralities$`Information Centrality`
 ```
 
-```{r gplot-size-eigenvector-centrality, echo = F, fig.cap = "Gonorrhea network, sized by eigenvector centrality."}
+```{r gplot-size-eigenvector-centrality, eval = F, fig.cap = "Gonorrhea network, sized by eigenvector centrality."}
 set.seed(10)
 
 centrality_eigen[1] <- 0.01
@@ -582,11 +584,11 @@ set.seed(55)
 
 # library(ergm) is loaded
 # simple model
-ergm_model1 <- ergm(gonnet_net ~ edges)
+ergm_model1 <- ergm(gonnet_net_nobar ~ edges)
 summary(ergm_model1)
 # homophily
 # do bar patrons hook up with one another?
-ergm_model2 <- ergm(gonnet_net ~ edges + nodematch("bar"))
+ergm_model2 <- ergm(gonnet_net_nobar ~ edges + nodematch("bar"))
 summary(ergm_model2)
 # goodness of fit test
 # closer the p-value is to 1 the better, both are very close to 1
@@ -599,7 +601,7 @@ plot(model2_gof)
 anova(ergm_model1, ergm_model2)
 
 # using symmetric model
-ergm_model3 <- ergm(gonnet_net ~ edges + degree(d = c(2:3)))
+ergm_model3 <- ergm(gonnet_net_nobar ~ edges + degree(d = c(2:3)))
 summary(ergm_model3)
 # diagnostics
 mcmc.diagnostics(ergm_model3)
@@ -609,31 +611,38 @@ plot(model3_gof)
 
 # heterophily of gender
 # i.e. do males connect to females and vice versa
-ergm_model4 <- ergm(gonnet_net ~ edges + nodemix("gender"))
+ergm_model4 <- ergm(gonnet_net_nobar ~ edges + nodemix("gender"))
 summary(ergm_model4)
 model4_gof <- gof(ergm_model4, GOF = ~model)
 model4_gof
 plot(model4_gof)
 
 # nodecov 
-ergm_model5 <- ergm(gonnet_net ~ edges + nodecov("bar"))
+ergm_model5 <- ergm(gonnet_net_nobar ~ edges + nodecov("bar"))
 summary(ergm_model5)
 model5_gof <- gof(ergm_model5, GOD = ~model)
 model5_gof
 plot(model5_gof)
 
 # nodefactor
-ergm_model6 <- ergm(gonnet_net ~ edges + nodefactor("bar"))
+ergm_model6 <- ergm(gonnet_net_nobar ~ edges + nodefactor("bar"))
 summary(ergm_model6)
 model6_gof <- gof(ergm_model6, GOF = ~model)
 model6_gof
 plot(model6_gof)
+
+# heterophily on bar attendance
+ergm_model8 <- ergm(gonnet_net_nobar ~ edges + nodemix("bar"))
+summary(ergm_model8)
+model8_gof <- gof(ergm_model8, GOF = ~model)
+model8_gof
+plot(model8_gof)
 ```
 
 
 ```{r ergm-model-fitting, echo = F, cache = T}
 set.seed(55)
-ergm_model7 <- ergm(gonnet_net ~ 
+ergm_model7 <- ergm(gonnet_net_nobar ~ 
                       edges + nodemix("gender") + degree(d = c(2:3)) + nodematch("bar"))
 summary(ergm_model7)
 model7_gof <- gof(ergm_model7, GOF = ~model)

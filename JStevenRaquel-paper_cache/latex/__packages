@@ -34,3 +34,9 @@ tergm
 ergm.count
 tsna
 statnet
+lattice
+latticeExtra
+GGally
+foreign
+ergm.userterms
+Matrix
