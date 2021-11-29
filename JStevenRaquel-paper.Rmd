@@ -173,7 +173,7 @@ network::set.edge.attribute(gonnet_net_bar, "lty",
 
 
 ```{r sociogram-ggnet2-bar, echo = F, fig.cap = "The two-mode network with bar as a node."}
-set.seed(61)
+set.seed(62)
 ggnet2(gonnet_net_bar,
        color = "gender", 
        palette = c("M" = "lightblue", "F" = "salmon", "NA" = "grey"),
@@ -186,7 +186,7 @@ ggnet2(gonnet_net_bar,
 
 
 ```{r sociogram-ggnet2-nobar, echo = F, fig.cap = "The one-mode network without the bar as a node."}
-set.seed(61)
+set.seed(62)
 # GGally is loaded
 ggnet2(gonnet_net_nobar, 
        color = "gender", palette = c("M" = "lightblue", "F" = "salmon"), 
