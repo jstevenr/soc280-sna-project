@@ -94,7 +94,7 @@ nodes <- rownames(gonnet)
 # indices where "x" and "x2 are
 drop <- which(nodes %in% c("x", "x2"))
 # drop rows/columns with these numbers
-gonnet <- gonnet[-xs, -xs]
+gonnet <- gonnet[-drop, -drop]
 # symmetrized graph (undirected)
 gonnet <- symmetrize(gonnet, rule = "weak")
 nodes <- nodes[-drop]
@@ -131,6 +131,8 @@ centralities <- calculate_centralities(gonnet_bar_ig,
                        include = pc[c(1, 4, 11, 16, 27, 
                                       45, 8, 18, 31, 43, 3, 19)])
 
+
+
 # we care about 
 # closeness centrality, katz centrality, eigenvector centrality, avg distance, degree centrality, and information centrality
 degree <- sna::degree(gonnet_bar, gmode = "graph")
@@ -140,6 +142,21 @@ cen <- data.frame(closeness = centralities$`Closeness Centrality (Freeman)`,
                   avg_distance = centralities$`Average Distance`,
                   information = centralities$`Information Centrality`,
                   degree)
+
+gonnet_df <- data.frame(
+  nodes,
+  attended_bar,
+  gender,
+  degree
+)
+
+# adding partners column to dataset
+gonnet_df <- gonnet_df %>% 
+  mutate(partners = ifelse(attended_bar == T, yes = degree - 1, no = degree))
+gonnet_df$partners[gonnet_df$nodes == "b"] <- NA
+
+# adding partners to vertex attributes
+network::set.vertex.attribute(gonnet_net_nobar, 'partners', gonnet_df$partners[-1])
 
 ```
 
@@ -164,9 +181,9 @@ network::set.edge.attribute(gonnet_net_bar, "lty",
 set.seed(62)
 ggnet2(gonnet_net_bar,
        color = "gender", 
-       palette = c("M" = "lightblue", "F" = "salmon", "NA" = "grey"),
+       palette = c("F" = "#F8766D", "M" = "#00BFC4", "NA" = "grey"),
        mode = "fruchtermanreingold",
-       label = T,
+       label = F,
        edge.lty = "lty", 
        size = 5)
 
@@ -176,92 +193,93 @@ ggnet2(gonnet_net_bar,
 
 Looking at this initial sociogram, where the bar node is firmly in the center, we see that it has outgoing connections to 17 nodes, which themselves have connections to at least one other node in the rest of the network. 
 
-The majority of ties are between individuals of the opposite sex, e.g. male-to-female or female-to-male, but there are a minority of instances where individuals have a tie to individuals of the same sex, e.g. m112 has ties with both m106 and m107, who both in turn have ties to at least one female node. 
+The majority of ties are between individuals of the opposite sex, e.g. male-to-female or female-to-male, but there are a minority of instances where individuals have a tie to individuals of the same sex, e.g. `m112` has ties with both `m106` and `m107`, who both in turn have ties to at least one female node. 
 
-The node m010 is also unique in that it happens to have outgoing ties to one female node (`f024`) and one male node (`m018`), the latter of which in turn has a tie with a female node (`f023`). The idea of men who have sex with men (MSM) or women who have sex with women (WSW) acting as bridging nodes between otherwise disparate sexual networks was something considered in the exploratory analysis but there just wasn't enough data to delve deeper into this subject.
+The node `m010` is also unique in that it happens to have ties to one female node (`f024`) and one male node (`m018`), the latter of which in turn has a tie with a female node (`f023`). The idea of men who have sex with men (MSM) or women who have sex with women (WSW) acting as bridging nodes between otherwise disparate sexual networks was something considered in the exploratory analysis but there just wasn't enough data to delve deeper into this subject.
 
-
-## Centrality Measures
-
-\singlespacing
-
-
-```{r centralities_more, echo = F}
-# plot of different centralities' contributions via PCA
-pca_centralities(centralities)
-```
+## Centrality 
 
 \doublespacing
 
 According to Borgatti and Everett (2006), _centrality_ is a summary index of a node's position in a graph, based on sums or averages of one of several things: 1) the number of edges the node has, 2) the length of the paths that end up at the node, or 3) the proportion of paths that contain the node inside of it (not as an endpoint).
 
-Different measures of centrality depend on functions of one of these aspects and communicate different things about a node, depending on the algorithm for the centrality measure. Among the centrality measures used in this analysis were that of _degree centrality_, _eigenvector centrality_, _load centrality_, and _information centrality_. 
+Different measures of centrality depend on functions of one of these aspects and communicate different things about a node, depending on the algorithm for the centrality measure. In this paper, we're going to look different kinds of centrality as a means of quantifying the impact of individual nodes on the network.
+
+### Principal Component Analysis
+
+Principal component analysis is a method for drawing out important variables from a dataset and is used frequently when dimensionality reduction is necessary. 
+
+\singlespacing
+
+```{r centralities_more, echo = F, include = F}
+# plot of different centralities' contributions via PCA
+pca_centralities(centralities)
+```
 
 ### Degree Centrality
 
 For an undirected network such as this, then the degree of some node $i$ is just the count of ties it has to other nodes. Supposing we had some adjacency matrix $A$, then the degree of node $i$ is equal to 
 
 $$D_i = \sum_j a_{ij}$$
-where $j$ is the number of nodes in the network and $a_{ij} = 1$ given that node $i$ has a tie with node $j$, and zero otherwise.
+where $j$ is the number of nodes in the network and $a_{ij} = 1$ given that node $i$ has a tie with node $j$, and zero otherwise. Note that in this network those who attended the bar have a tie with the bar node to represent that relationship, hence in order to treat degree as a means of quantifying sexual partners, we added in an adjustment in the form of a new variable called `partners` which subtracts 1 from the degree of those bar attendees. 
 
-As noted earlier in Figure 3, the largest component contains 2 nodes (`m017` and `f011`) with degrees of 6 and 7 respectively. Noting their respective positions in the network, we see that a high degree centrality doesn't necessarily imply a large impact on the network in general, as long as an ego's alters do not themselves have a degree centrality. 
+As noted earlier in Figure 3, the largest component contains 2 nodes (`m017` and `f011`) with degrees of 6 and 7 respectively. Noting their respective positions in the network, we see that a high degree centrality doesn't necessarily imply a large impact on the network in general, as long as an ego's alters do not themselves have a high degree centrality. The converse is also true where an ego can have a small degree but still be connected to an alter than itself has a high degree, e.g. `f014` was a bar attendee with a degree of one, connecting itself to `m208` who accordingly has 4 other alters, some of whom have more among them. 
 
 It's possible in fact for an ego to have a high degree but whose alters themselves have a very low degree, such that their respective sub-component is not very large, e.g. `f004` which has an outdegree of 5, but all of its alters have a degree of only 1 or 2. 
 
 Other forms of centrality are better at measuring this impact, for example, eigenvector centrality, which will be discussed later in this literature.
 
-\singlespacing
-
-```{r figure-bar-degree, fig.cap = "Distribution of degree, by bar attendance.", echo=FALSE}
-# boxplot of degree by bar attendance
-gonnet_df2 %>%
+```{r table-male-female-degree, fig.cap = "Average number of partners, by gender.", echo = F}
+gonnet_df %>% 
   filter(nodes != "b") %>%
-  ggplot(aes(x = attended_bar, y = degree)) +
-  geom_boxplot() + 
-  ggtitle("Boxplot of Degree, by Bar Attendance") +
-  theme_bw() +
-  xlab("Bar Attendance") + ylab("Degree")
-```
-
-Figure 4, which depicts a boxplot of degree, stratified by gender, we observe that the average degree for  
-
-
-```{r figure-gender-degree, fig.cap = "Distribution of degree, by gender.", echo=FALSE}
-# boxplot of degree by gender
-gonnet_df2 %>%
-  filter(nodes != "b") %>%
-  ggplot(aes(x = gender, y = degree)) +
-  geom_boxplot() + 
-  ggtitle("Boxplot of Degree, by Gender") +
-  theme_bw() +
-  xlab("Gender") + ylab("Degree")
-```
-
-```{r table-male-female-degree, fig.cap = "Average degree, by gender.", echo = F}
-# average degree overall
-mean_overall_degree <- gonnet_df2$degree %>% mean()
-
-gonnet_df2 %>% 
-  filter(!(gender == "NA")) %>%
   group_by(gender) %>%
-  summarize(average_degree = mean(degree) %>% round(3)) %>% 
-  kbl(col.names = c("Gender", "Mean Degree")) %>%
+  summarize(average_partners = mean(partners) %>% round(3)) %>% 
+  kbl(col.names = c("Gender", "Mean Number of Partners")) %>%
   kable_classic()
-
 ```
 
-```{r table-bar-degree, fig.cap = "Average degree, by bar attendance.", echo = F}
-gonnet_df2 %>% 
-  filter(!(gender == "NA")) %>%
+We observe from the data that on average, men have a slightly higher number of sexual partners than women in this sample.
+
+```{r table-bar-degree, fig.cap = "Average number of partners, by bar attendance.", echo = F}
+gonnet_df %>% 
+  filter(nodes != "b") %>%
   group_by(attended_bar) %>%
-  summarize(average_degree = mean(degree) %>% round(3)) %>% 
-  kbl(col.names = c("Attended Bar", "Mean Degree")) %>%
+  summarize(average_partners = mean(partners) %>% round(3)) %>% 
+  kbl(col.names = c("Attended Bar", "Mean Number of Partners")) %>%
   kable_classic()
+```
 
+We further observe that those who attend the bar end up having an average of about 1.6 sexual partners compared to as many as 2.1 partners from those who did. Again, these two quantities are technically dependent (owing to the fact that these are not isolated samples, i.e. the bar attendees can be partnered with the non-attendees), so we can't formally compare them with a t-test, but it is something to take note of going forward. Later on in the literature we will bar attendance as a data attribute when developing an exponential random graph model (ERGM), in order to model this relationship, should it exist.
 
+```{r figure-bar-degree, fig.cap = "Distribution of number of partners, by bar attendance.", echo=FALSE}
+# boxplot of degree by bar attendance
+gonnet_df %>%
+  filter(nodes != "b") %>%
+  ggplot(aes(x = partners, fill = attended_bar)) +
+  geom_histogram(binwidth = 1, position = "dodge", colour = "black", lwd = 0.75) + 
+  ggtitle("Histogram of # of Partners, by Bar Attendance") +
+  theme_bw() +
+  scale_x_discrete("# of Partners", breaks = 0:7, labels = 0:7, limits = c(0:7)) +
+  ylab("Node Count")
 ```
 
 \doublespacing
+
+Figure 4, which depicts a histogram of number of partners, colored by bar attendance, shows that a large number of non-bar patrons only have one partner; this is mostly bolstered by the fact that most of the members of the network do not frequent the bar, and also there are a sizeable number of individuals in the network who were simply alters of an ego who did attend the bar and do not have any other alters themselves.
+
+```{r figure-gender-degree, fig.cap = "Distribution of partners, by gender.", echo=FALSE}
+# boxplot of degree by gender
+gonnet_df %>%
+  filter(nodes != "b") %>%
+  ggplot(aes(x = partners, fill = gender)) +
+  geom_histogram(binwidth =1,position = "dodge", colour = "black", lwd = 0.75) + 
+  ggtitle("Histogram of # of Partners, by Gender") +
+  theme_bw() + 
+  scale_x_discrete("# of Partners", breaks = 0:7, labels = 0:7, limits = c(0:7)) + 
+  ylab("Node Count")
+```
+
+In this case, we are a difference in the two distributions of men and women; there are many more women (10+) who had only one sexual partner in this network, with the remaining numbers between comparatively small, conversely the majority of the men are split between either one or two partners. Overall the distributions for 3 or more partners are similar across genders.
 
 The analysis gave that the overall average degree for the directed graph is approximately 1, implying that on average individuals named one sexual partner. It's important to note that many outer edges have an degree of 0, which skews down the mean calculation somewhat. 
 
@@ -271,29 +289,26 @@ The implication of this observation is two-fold. For one, rather than most indiv
 
 Eigenvector centrality is calculated both as a function of a node's degree but also as a function of the degree of the nodes it is connected to. In other words, a node with a high eigenvector centrality is well-connected to nodes that are themselves well-connected. 
 
-### Load Centrality
+### Katz Centrality
 
-### Information Centrality
-\singlespacing
+
+### Average Distance
 
 ```{r gplot-degree, echo = F, fig.cap = "Gonorrhea network, sized by degree."}
 # normalizing the degree of bar because of course it has a high degree
 degree_m <- cen$degree + 1
 degree_m[1] <- 3
 
-set.seed(10)
+set.seed(62)
 
 # plotting based on degree
-ggnet2(gonnet_net_nobar, 
+ggnet2(gonnet_net_bar, 
        color = "gender", palette = c("M" = "lightblue", "F" = "salmon"), 
        shape = "bar", 
        mode = "fruchtermanreingold", 
-       size = "degree",
+       size = "partners",
        label = F)
 ```
-
-
-## Principal Component Analysis
 
 ```{r gplot- centralities, include = F}
 # extracting the centralities that were important based on the PCA
@@ -303,18 +318,6 @@ centrality_degree <- centralities$`Degree Centrality`
 centrality_geodesic <- centralities$`Geodesic K-Path Centrality`
 centrality_shortest <- centralities$`Shortest-Paths Betweenness Centrality`
 centrality_info <- centralities$`Information Centrality`
-```
-
-```{r gplot-size-eigenvector-centrality, eval = F, fig.cap = "Gonorrhea network, sized by eigenvector centrality."}
-set.seed(10)
-
-centrality_eigen[1] <- 0.01
-gplot(gonnet, vertex.col = gonnet_df$col,
-      vertex.sides = gonnet_df$gender_lty,
-      vertex.cex = scale(centrality_eigen) + 2,
-      # displaylabels = T, label.cex = 0.6, label.pos = 2,
-      boxed.labels = F, pad = 2,
-      coord = org_coord, usearrows = F)
 ```
 
 ```{r find-best-cluster-number, echo = F, eval = F}
