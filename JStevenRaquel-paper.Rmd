@@ -71,14 +71,6 @@ Some of these biases could be mitigated if we had all of the complete informatio
 
 Wasserman and Faust (1994) define "cutpoints" and "bridges" as nodes and ties respectively that cause the graph in which they are contained to have less components if they were to be taken out from the graph. In other words, they are the nodes or ties that connect what would be otherwise unconnected sub-graphs. These are crucial in sexual network analysis because these nodes and ties are the difference between whether a certain network may propagate an STI outbreak or not. 
 
-# Methods
-
-# Results
-
-# Discussion
-
-# Conclusions
-
 \singlespacing
 
 ```{r data-prep, echo = F}
@@ -259,9 +251,9 @@ gonnet_df %>%
 
 \doublespacing
 
-Figure 4, which depicts a histogram of number of partners, colored by bar attendance, shows that a large number of non-bar patrons only have one partner; this is mostly bolstered by the fact that most of the members of the network do not frequent the bar, and also there are a sizeable number of individuals in the network who were simply alters of an ego who did attend the bar and do not have any other alters themselves.
+Figure 2, which depicts a histogram of number of partners, colored by bar attendance, shows that a large number of non-bar patrons only have one partner; this is mostly bolstered by the fact that most of the members of the network do not frequent the bar, and also there are a sizeable number of individuals in the network who were simply alters of an ego who did attend the bar and do not have any other alters themselves.
 
-```{r figure-gender-degree, fig.cap = "Distribution of partners, by gender.", echo=FALSE, warning = F}
+```{r figure-gender-degree-histogram, fig.cap = "Histogram of partners, by gender.", echo=FALSE, warning = F}
 # boxplot of degree by gender
 gonnet_df %>%
   filter(nodes != "b") %>%
@@ -273,7 +265,7 @@ gonnet_df %>%
   ylab("Node Count")
 ```
 
-In this case, we are a difference in the two distributions of men and women; there are many more women (10+) who had only one sexual partner in this network, with the remaining numbers between comparatively small, conversely the majority of the men are split between either one or two partners. Overall the distributions for 3 or more partners are similar across genders.
+In this case, we are seeing difference in the two distributions of men and women; there are many more women (10+) who had only one sexual partner in this network, with the remaining numbers between comparatively small. Conversely the majority of the men are split between either one or two partners. Overall the distributions for 3 or more partners are similar across genders. 
 
 The analysis gave that the overall average degree for the directed graph is approximately 1, implying that on average individuals named one sexual partner. It's important to note that many outer edges have an degree of 0, which skews down the mean calculation somewhat. 
 
@@ -282,6 +274,32 @@ The implication of this observation is two-fold. For one, rather than most indiv
 ### Eigenvector Centrality
 
 Eigenvector centrality is calculated both as a function of a node's degree but also as a function of the degree of the nodes it is connected to. In other words, a node with a high eigenvector centrality is well-connected to nodes that are themselves well-connected. 
+
+```{r eigenvector-centrality}
+eigenvectors <- eigen(gonnet_net_nobar)
+eig <- eigenvectors$vectors[,1] %>% as.numeric()
+
+# adding eigenvector centrality as a vertex attribute to the networkr
+network::set.vertex.attribute(gonnet_net_nobar, 'eig', eig)
+network::set.vertex.attribute(gonnet_net_nobar, 'bar', attended_bar[-1])
+# plotting the network, sized by eigenvector centrality
+ggnet2(gonnet_net_nobar, 
+  color = "gender", 
+  palette = c("F" = "#F8766D", "M" = "#00BFC4", "NA" = "grey"),
+  mode = "fruchtermanreingold",
+  label = F,
+  edge.lty = "lty",
+  size = 3)
+
+
+gonnet_df_nobar <- gonnet_df[-1,]
+gonnet_df_nobar <- cbind(gonnet_df_nobar, eig)
+gonnet_df_nobar %>% 
+  ggplot(aes(x = partners, y = eig, col = attended_bar)) +
+  geom_point()
+
+
+```
 
 ### Katz Centrality
 
@@ -385,7 +403,7 @@ ergm_model6 <- ergm(gonnet_net_nobar ~ edges + nodefactor("bar"))
 # heterophily on bar attendance
 ergm_model8 <- ergm(gonnet_net_nobar ~ edges + nodemix("bar"))
 
-ergm_model9 <- ergm(gonnet_net_nobar ~ edges + gwdegree(decay = 5, attr="bar", fixed = T))
+ergm_model9 <- ergm(gonnet_net_nobar ~ edges + gwdegree(decay = 1, attr="bar", fixed = T))
 
 summary(ergm_model9)
 ```
