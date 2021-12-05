@@ -207,6 +207,10 @@ gonnet_df %>%
 ## Exponential Random Graph Model (ERGM)
 
 - While measures such as network centrality and network density can provide us some information about the characteristics of a network, in the case of a sexual network in which ties have an explicitly social component to them, an ERGM which incorporates the attributes of actors within the network can be more informative.
+- ERGMs model networks as a function of network statistics, by imagining the network as one instance of a set of possible, similar networks, i.e. the outcomes of a stochastic (random) process. 
+
+
+## Exponential Random Graph Model (ERGM)
 - When modeling the ERGM for this network, the bar node was redacted so that the network could be a one-mode network, and instead attendance of the bar was assigned to the vertices as an attribute, as was gender. This model was saved as `gonnet_net_nobar` in `R`.
 
 ## The disconnected network
@@ -233,7 +237,7 @@ ggnet2(gonnet_net_nobar,
 
 ## Fitting the ERGM model
 
-- When fitting the ERGM model, first we started with the simplest model that only modeled the number of edges (this would be akin to an intercept-only model in logistic regression). We then built several more models which only had one parameter, and then compared the Akaike Information Criteria (AIC) of the models to determine which among these model parameters were worth including. 
+- When fitting the ERGM model, first we started with the simplest model that only models the number of edges (this would be akin to an intercept-only model in logistic regression). We then built several more models which only had one parameter, and then compared the Akaike Information Criteria (AIC) of the models to determine which among these model parameters were worth including. 
 - Among the model parameters fit were homophily (`nodematch`), heterophily (`nodemix`) and degree (`degree`). 
 
 ```{r fitting-ergms-run, include = F}
@@ -343,8 +347,8 @@ lmtest::lrtest(ergm_model8, ergm_model7)
 - Hence we have enough evidence to reject the null hypothesis and conclude that full model, which has the homophily attribute for bar attendance in addition to the heterophily attribute for gender and the degree attribute, is the preferred model.
 
 ## Markov Chain Monte Carlo (MCMC)
+- 
 
-- The 
 
 ## Model Diagnostics
 
@@ -363,7 +367,9 @@ model8_gof$pval.model
 plot(model8_gof)
 ```
 
-## MCMC
+## MCMC Diagnostics
 ```{r mcmc-diagnostics, echo = F}
 mcmc.diagnostics(ergm_model8)
 ```
+
+## Model Interpretation
