@@ -354,11 +354,31 @@ The ERGM model requires a one-mode network, so we can create one by dropping the
 set.seed(62)
 # GGally is loaded
 ggnet2(gonnet_net_nobar, 
-       color = "gender", palette = c("M" = "lightblue", "F" = "salmon"), 
+       color = "gender", 
+       palette = c("F" = "#F8766D", "M" = "#00BFC4"), 
        shape = "bar", 
        mode = "fruchtermanreingold", 
        label = F,
        size = 5)
+
+```
+
+```{r edges-counted}
+gonnet_df_nobar %>% 
+  filter(attended_bar == TRUE) %>% 
+  select(partners) %>% unlist() %>% sum()
+
+gonnet_df_nobar %>% 
+  filter(attended_bar == FALSE) %>% 
+  select(partners) %>% unlist() %>% sum()
+
+bar_attendees <- 
+  gonnet_df %>% 
+  filter(attended_bar == TRUE) %>% 
+  select(nodes) %>% unlist() %>% as.vector()
+
+# the matrix with only bar attendees, and no bar
+gonnet[,bar_attendees][-1,] %>% sum()
 
 ```
 
@@ -396,16 +416,10 @@ ergm_model2 <- ergm(gonnet_net_nobar ~ edges + nodematch("bar"))
 ergm_model3 <- ergm(gonnet_net_nobar ~ edges + degree(d = c(2:3)))
 # heterophily of gender
 ergm_model4 <- ergm(gonnet_net_nobar ~ edges + nodemix("gender"))
-# nodecov 
-ergm_model5 <- ergm(gonnet_net_nobar ~ edges + nodecov("bar"))
 # nodefactor
-ergm_model6 <- ergm(gonnet_net_nobar ~ edges + nodefactor("bar"))
+ergm_model5 <- ergm(gonnet_net_nobar ~ edges + nodefactor("bar"))
 # heterophily on bar attendance
-ergm_model8 <- ergm(gonnet_net_nobar ~ edges + nodemix("bar"))
-
-ergm_model9 <- ergm(gonnet_net_nobar ~ edges + gwdegree(decay = 1, attr="bar", fixed = T))
-
-summary(ergm_model9)
+ergm_model6 <- ergm(gonnet_net_nobar ~ edges + nodemix("bar"))
 ```
 
 ```{r table-model-comparison, echo = F,  results = 'hide', fig.keep = 'all'}
@@ -430,10 +444,12 @@ df %>%
 ```{r ergm-model-fitting, echo = F, cache = T, include = F}
 set.seed(55)
 ergm_model7 <- ergm(gonnet_net_nobar ~ 
-                      edges + nodemix("gender") + nodematch("bar"))
-summary(ergm_model7)
-model7_gof <- gof(ergm_model7, GOF = ~model)
-model7_gof
+                      edges + 
+                      degree(d = c(1:3)) + 
+                      nodemix("gender"))
+# summary(ergm_model7)
+# model7_gof <- gof(ergm_model7, GOF = ~model)
+# model7_gof
 # plot(model7_gof)
 # mcmc.diagnostics(ergm_model7)
 ```
@@ -441,17 +457,25 @@ model7_gof
 ```{r ergm-model8, echo = F, cache = T, results = 'hide', fig.keep = 'all'}
 set.seed(55)
 ergm_model8 <- ergm(gonnet_net_nobar ~ 
-                      edges + nodemix("gender") + nodematch("bar", levels = 1) + degree(d = c(2:3)))
-summary(ergm_model8)
-model8_gof <- gof(ergm_model8)
+                      edges + 
+                      degree(d = c(1:3)) + 
+                      nodemix("gender") + 
+                      nodematch("bar"))
 
-plot(model8_gof)
-mcmc.diagnostics(ergm_model8)
 ```
 
 
 ```{r model-test}
 lmtest::lrtest(ergm_model8, ergm_model7)
+```
+
+```{r model-diagnostics}
+
+summary(ergm_model8)
+model8_gof <- gof(ergm_model8)
+
+plot(model8_gof)
+mcmc.diagnostics(ergm_model8)
 ```
 
 \newpage
@@ -464,9 +488,10 @@ De P, Singh AE, Wong T, et al. 2004. "Sexual network analysis of a gonorrhea    
 
 Carrington, P. and Scott, J., 2011. *The SAGE handbook of social network          analysis. 1st ed.* Los Angeles [etc.]: SAGE Publications, pp.484-500.
 
-  Irene A. Doherty, Nancy S. Padian, Cameron Marlow, Sevgi O. Aral, Determinants and Consequences of Sexual Networks as They Affect the Spread of Sexually Transmitted Infections, The Journal of Infectious Diseases, Volume 191, Issue Supplement_1, February 2005, Pages S42–S54, https://doi.org/10.1086/425277
+Irene A. Doherty, Nancy S. Padian, Cameron Marlow, Sevgi O. Aral, Determinants and Consequences of Sexual Networks as They Affect the Spread of Sexually Transmitted Infections, The Journal of Infectious Diseases, Volume 191, Issue Supplement_1, February 2005, Pages S42–S54, https://doi.org/10.1086/425277
 
 Wasserman, S. and Faust, K., 1994. Social network analysis: methods and applications. Cambridge: Cambridge University Press.
+
 
 \newpage
 

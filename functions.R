@@ -388,3 +388,17 @@ mc_sim <- function(sociomatrix, n, alpha = 0.05, test) {
   
 }
 
+# get aic function
+get_from_summary <- function(ergm_model, object) {
+    
+  sum <- summary(ergm_model)  
+  
+  if (object == "aic") {
+    y <- sum$aic[1]
+  }
+  else if (object == "formula") {
+    y <- sum$formula
+  }
+  
+  return(y)
+}
