@@ -1,0 +1,188 @@
+---
+title: "A social network analysis of a gonorrhea outbreak in Alberta, Canada"
+author: "J Steven Raquel"
+date: "12/07/2021"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(sna)
+library(igraph)
+library(epimdr) # for gonnet data
+library(CINNA) # for pca_centralities()
+library(car) # for leveneTest()
+library(factoextra) # for nbclust
+library(kableExtra) # nicer tables
+library(knitr) # kable
+library(ergm) # ERGMS
+library(coda)
+library(statnet)
+library(latticeExtra)
+library(GGally) # ggnet2 
+library(foreign)
+library(ergm.userterms)
+library(Matrix)
+source(here::here("functions.R"))
+
+```
+
+```{r data-prep, echo = F}
+# library(epimdr) is loaded
+data(gonnet)
+# data is loaded as 'gonnet'
+nodes <- rownames(gonnet)
+# indices where "x" and "x2 are
+drop <- which(nodes %in% c("x", "x2"))
+# drop rows/columns with these numbers
+gonnet <- gonnet[-drop, -drop]
+# symmetrized graph (undirected)
+gonnet <- symmetrize(gonnet, rule = "weak")
+nodes <- nodes[-drop]
+rownames(gonnet) <- nodes
+colnames(gonnet) <- nodes
+# creating bar attendance vector
+attended_bar <- gonnet["b", ] == 1
+# creating gender vector
+gender <- ifelse(grepl("m", nodes), yes = "M", no = NA)
+gender <- ifelse(grepl("f", nodes), yes = "F", no = gender)
+
+# dropping bar object from this network
+gonnet_nobar <- gonnet[-1,]
+gonnet_nobar <- gonnet_nobar[,-1]
+
+# creating network object
+gonnet_net_nobar <- network(gonnet_nobar, directed = F)
+
+# adding bar attendance on graphs
+network::set.vertex.attribute(gonnet_net_nobar, 'bar', attended_bar[-1])
+# adding gender to the graph
+network::set.vertex.attribute(gonnet_net_nobar, 'gender', gender[-1])
+
+gonnet_bar <- gonnet
+# creating igraph object
+gonnet_bar_ig <- graph_from_adjacency_matrix(gonnet_bar)
+
+(pc <- proper_centralities(gonnet_bar_ig)) %>% 
+  capture.output() %>%
+  invisible()
+
+# calculating centralities for the connected graph
+centralities_bar <- calculate_centralities(gonnet_bar_ig, 
+                       include = pc[c(1, 4, 11, 16, 27, 
+                                      45, 8, 18, 31, 43, 3, 19)])
+
+
+# we care about 
+# closeness centrality, katz centrality, eigenvector centrality, avg distance, degree centrality, and information centrality
+degree <- sna::degree(gonnet_bar, gmode = "graph")
+cen_bar <- data.frame(closeness = centralities_bar$`Closeness Centrality (Freeman)`,
+                  katz = centralities_bar$`Katz Centrality (Katz Status Index)`,
+                  eigenvector = centralities_bar$`eigenvector centralities`,
+                  avg_distance = centralities_bar$`Average Distance`,
+                  information = centralities_bar$`Information Centrality`,
+                  degree)
+
+gonnet_df <- data.frame(
+  nodes,
+  attended_bar,
+  gender,
+  degree
+)
+
+# adding partners column to dataset
+gonnet_df <- gonnet_df %>% 
+  mutate(partners = ifelse(attended_bar == T, yes = degree - 1, no = degree))
+gonnet_df$partners[gonnet_df$nodes == "b"] <- NA
+
+# adding partners to vertex attributes
+network::set.vertex.attribute(gonnet_net_nobar, 'partners', gonnet_df$partners[-1])
+
+# creating a network object of the two-mode network with the bar
+gonnet_net_bar <- network(gonnet_bar, directed = F)
+
+# adding gender to the graph
+network::set.vertex.attribute(gonnet_net_bar, 'gender', gender)
+network::set.vertex.attribute(gonnet_net_bar, 'degree', degree)
+
+# adding a linetype attribute so that the edges to the bar are dashed lines
+edgelist <- as.matrix(gonnet_net_bar, matrix.type="edgelist")
+network::set.edge.attribute(gonnet_net_bar, "lty", 
+                            ifelse(edgelist[,2] == 1, 2, 1))
+
+
+```
+
+
+## Outline
+
+- Background
+- Methods
+- Discussion
+- Conclusion
+
+## Background
+
+- This dataset concerns a localised outbreak of *Neisseria gonorrehoeae* in an indigenous community located in Alberta, Canada. it was originally analyzed in a paper by P De, et al. (2004), in which they used measures of network centrality (e.g. information centrality) to determine the association between the risk of infection between members of the network and their position within the network itself.
+- The network consists of 89 individuals, both male and female, 17 of whom were found to be patrons of a local bar in the area.
+- This work expands upon the original analysis by looking at other types of network centrality such as eigenvector centrality, as well as applying exponential random graph modeling (ERGM) to the network in order to quantify the effect of various attributes of the network (e.g. gender, bar attendance).
+
+## Background
+
+- Gonorrhea is a sexually transmitted disease/infection (STD/STI) which can be transmitted orally, vaginally or anally. 
+- According to the Centers for Disease Control and Prevention, about 1 in 5 people in the United States have a STI, totalling nearly 68 million infections in 2018.
+- Of the 26 million new infections in 2018, it is estimated about 1.6 million of them were gonorrhea. 
+- Although it can have many serious side effects, it can also be symptomless, leading to individuals unknowingly infecting their partners. 
+
+## Background
+
+- Although the adjacency matrix for the data allowed us to analyze the network as a directed network, we thought it prudent to symmetrize the matrix (as was done in P De et al.)   
+- 2 of the datapoints were missing information regarding their gender so we dropped them from the dataset. They both had a degree of 1 so it wasn't thought that their exclusion would be impactful.
+
+## The connected network with the bar as a node
+
+```{r sociogram-bar}
+set.seed(62)
+ggnet2(gonnet_net_bar,
+       color = "gender", 
+       palette = c("F" = "#F8766D", "M" = "#00BFC4", "NA" = "grey"),
+       mode = "fruchtermanreingold",
+       label = T,
+       edge.lty = "lty", 
+       size = 5)
+```
+
+
+## The connected network with the bar as a node 
+
+- There are about 9 or so subcomponents of this graph; notice that the largest among them has 3 bar attendees within it, 2 of whom have at least 5 partners. 
+- The majority of edges are between 
+
+
+## The disconnected network without the bar as a node
+
+```{r sociogram-nobar}
+set.seed(62)
+# GGally is loaded
+ggnet2(gonnet_net_nobar, 
+       color = "gender", palette = c("M" = "lightblue", "F" = "salmon"), 
+       shape = "bar", 
+       mode = "fruchtermanreingold", 
+       label = T,
+       size = 5)
+```
+
+## Methods
+
+- Degree Centrality
+- Eigenvector Centrality
+- Katz Centrality
+- Average Distance
+- Exponential Random Graph Model (ERGM)
+
+
+## Degree Centrality
+
+- 
+

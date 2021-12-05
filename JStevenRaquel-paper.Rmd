@@ -114,20 +114,19 @@ gonnet_bar_ig <- graph_from_adjacency_matrix(gonnet_bar)
   invisible()
 
 # calculating centralities for the connected graph
-centralities <- calculate_centralities(gonnet_bar_ig, 
+centralities_bar <- calculate_centralities(gonnet_bar_ig, 
                        include = pc[c(1, 4, 11, 16, 27, 
                                       45, 8, 18, 31, 43, 3, 19)])
-
 
 
 # we care about 
 # closeness centrality, katz centrality, eigenvector centrality, avg distance, degree centrality, and information centrality
 degree <- sna::degree(gonnet_bar, gmode = "graph")
-cen <- data.frame(closeness = centralities$`Closeness Centrality (Freeman)`,
-                  katz = centralities$`Katz Centrality (Katz Status Index)`,
-                  eigenvector = centralities$`eigenvector centralities`,
-                  avg_distance = centralities$`Average Distance`,
-                  information = centralities$`Information Centrality`,
+cen_bar <- data.frame(closeness = centralities_bar$`Closeness Centrality (Freeman)`,
+                  katz = centralities_bar$`Katz Centrality (Katz Status Index)`,
+                  eigenvector = centralities_bar$`eigenvector centralities`,
+                  avg_distance = centralities_bar$`Average Distance`,
+                  information = centralities_bar$`Information Centrality`,
                   degree)
 
 gonnet_df <- data.frame(
@@ -196,10 +195,12 @@ Different measures of centrality depend on functions of one of these aspects and
 
 Principal component analysis is a method for drawing out important variables from a dataset and is used frequently when dimensionality reduction is necessary. 
 
-
 ```{r centralities_more, echo = F, include = F}
 # plot of different centralities' contributions via PCA
-pca_centralities(centralities)
+pca_centralities(centralities_bar)
+
+
+pca_centralities(centralities_nobar)
 ```
 
 ### Degree Centrality
@@ -273,7 +274,7 @@ The implication of this observation is two-fold. For one, rather than most indiv
 
 ### Eigenvector Centrality
 
-Eigenvector centrality is calculated both as a function of a node's degree but also as a function of the degree of the nodes it is connected to. In other words, a node with a high eigenvector centrality is well-connected to nodes that are themselves well-connected. 
+Eigenvector centrality is calculated both as a function of a node's degree but also as a function of the degree of the nodes it is connected to. In other words, a node with a high eigenvector centrality is well-connected to nodes that are themselves well-connected. Contextually, a node in this setting would have a high number of partners who also have a high number of partners.
 
 ```{r eigenvector-centrality}
 eigenvectors <- eigen(gonnet_net_nobar)
@@ -288,8 +289,7 @@ ggnet2(gonnet_net_nobar,
   palette = c("F" = "#F8766D", "M" = "#00BFC4", "NA" = "grey"),
   mode = "fruchtermanreingold",
   label = F,
-  edge.lty = "lty",
-  size = 3)
+  size = "degree")
 
 
 gonnet_df_nobar <- gonnet_df[-1,]
