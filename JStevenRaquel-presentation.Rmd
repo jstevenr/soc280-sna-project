@@ -235,7 +235,7 @@ ggnet2(gonnet_net_nobar,
 - Note the presence of a "6-cycle" in the largest subcomponent, in which 6 separate nodes are jointly connected through one another. This is the only such appearance of a k-cycle in the entire network. 
 - The largest subcomponent of the graph includes 38 of the 86 nodes in the network, or approximately 44% of all egos. 
 
-## Fitting the ERGM model
+## Model Selection
 
 - When fitting the ERGM model, first we started with the simplest model that only models the number of edges (this would be akin to an intercept-only model in logistic regression). We then built several more models which only had one parameter, and then compared the Akaike Information Criteria (AIC) of the models to determine which among these model parameters were worth including. 
 - Among the model parameters fit were homophily (`nodematch`), heterophily (`nodemix`) and degree (`degree`). 
@@ -266,10 +266,10 @@ ergm_model6 <- ergm(gonnet_net_nobar ~ edges +
 
 - The Akaike Information Criterion (AIC) is an estimator of out-of-sample prediction error.
 - We use it as a means of model selection, where we generally opt to select the model with the lowest AIC.
-- $$AIC = -2 \ln(L) + 2k$$
+- $$AIC = -2 \ln(\mathcal{L}) + 2k$$
 - Where $L$ is the likelihood of the model, and $k$ is the number of parameters.
 
-## Fitting the ERGM model
+## Model Selection
 
 ```{r table-model-comparison, echo = F}
 model_list <- list(ergm_model1, ergm_model2, ergm_model3,
@@ -310,41 +310,55 @@ ergm_model8 <- quietly(ergm)(gonnet_net_nobar ~
 ergm_model8 <- ergm_model8$result
 ```
 
-```{r }
-ergm(gonnet_net_nobar ~  edges + degree(d = c(1:3)) + nodemix("gender") + 
-                      nodematch("bar")) 
-
-```
-
-## Likelihood Ratio Testing
+## Likelihood Ratio Test 
 
 - A likelihood ratio test is a method to compare a full model to a nested model, where the nested model has some subset of the same parameters as the full model.
 - When comparing a full model to a nested model, we can conduct a Likelihood Ratio Test, in which we take the ratio of the maximum likelihoods of both the full model and the nested model, in order to determine whether the nested model explains the data as well as the full model.
 
-## Likelihood Ratio Testing
+## Likelihood Ratio Test
 
 - $\lambda = \frac{\mathcal{L}_s (\hat \theta)}{\mathcal{L}_g (\hat \theta)}$
 - $\text{LRT} = -2 \ln \lambda$
-- where $\mathcal{L}_s (\hat \theta)$ is the maximized log-likelihood for the nested model, and $\mathcal{L}_g$ is the maximized log-likelihood for the full model.
+- Where $\mathcal{L}_s (\hat \theta)$ is the maximized log-likelihood for the nested model, and $\mathcal{L}_g$ is the maximized log-likelihood for the full model.
 
-## Likelihood Ratio Testing
+## Likelihood Ratio Test
 
 - $H_0$: The nested model fits the data as well as the full model. i.e. The nested model is preferred.
 - $H_A$: The nested model does not fit the data as well as the full model. i.e. The full model is preferred.
-- We reject the null hypothesis $H_0$ when the test statistic falls within the rejection region of a chi-squared distribution with degrees of freedom $k$ where $k$ is the difference in the number of parameters between the two models. Otherwise, we fail to reject $H_0$. 
+- We reject the null hypothesis $H_0$ when the test statistic falls within the rejection region of a $\chi^2$ distribution with degrees of freedom $k$ where $k$ is the difference in the number of parameters between the two models. Otherwise, we fail to reject $H_0$. 
 
 
-## Likelihood Ratio Testing
+## Likelihood Ratio Test
 
 ```{r lrtest}
 set.seed(5)
-lmtest::lrtest(ergm_model8, ergm_model7)
+lrtest <- lmtest::lrtest(ergm_model8, ergm_model7)
+lrtest
+
 ```
 
-## Model Selection
+## Likelihood Ratio Test
 
-- The chi-squared test statistic for the likelihood ratio test had a p-value of $\approx 0.002$, which is less than our significance level $\alpha = 0.05$. 
+- The full model has 1 more parameter than the nested model, so we are comparing our LRT test statistic to a $\chi^2$ distribution with 1 degree of freedom.
+- The $\chi^2$ test statistic for the likelihood ratio test had a p-value of $\approx 0.002$, which is less than our significance level $\alpha = 0.05$. 
 - Hence we have enough evidence to reject the null hypothesis and conclude that full model, which has the homophily attribute for bar attendance in addition to the heterophily attribute for gender and the degree attribute, is the preferred model.
+
+## Likeilhood Ratio Test
+
+```{r lrtest-curve, echo = F}
+# test statistic
+LRT <- lrtest$Chisq[2]
+
+# randomly sampling from a chi-squared distribution with 1 df
+chisq_plot_df <- data.frame(values = rchisq(1000, df = 1))
+ 
+ggplot(chisq_plot_df, aes(x = values)) +
+    geom_density(size = 1) +
+    geom_vline(xintercept = LRT, linetype = "dashed", colour = "red") +
+    ggtitle(expression(chi[2]), "distribution with 1 degree of freedom")
+```
+
+
 
 ## Markov Chain Monte Carlo (MCMC)
 - 
