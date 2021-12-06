@@ -130,29 +130,42 @@ network::set.edge.attribute(gonnet_net_bar, "lty",
 
 ## Background
 
-- This dataset concerns a localised outbreak of *Neisseria gonorrehoeae* in an indigenous community located in Alberta, Canada. it was originally analyzed in a paper by P De, et al. (2004), in which they used measures of network centrality (e.g. information centrality) to determine the association between the risk of infection between members of the network and their position within the network itself.
+- This dataset concerns a localised outbreak of *Neisseria gonorrehoeae* in an indigenous community located in Alberta, Canada. 
+- It was originally analyzed in a paper by Prithwish De, et al. (2004), in which they used measures of network centrality (e.g. information centrality) to determine the association between the risk of infection between members of the network and their position within the network itself.
+- The data for the 2004 paper was sourced from an earlier 2001 study by the authors in which they formulated a plan to address the outbreak.
 - The network consists of 89 individuals, both male and female, 17 of whom were found to be patrons of a local bar in the area.
-- This work expands upon the original analysis by looking at other types of network centrality such as eigenvector centrality, as well as applying exponential random graph modeling (ERGM) to the network in order to quantify the effect of various attributes of the network (e.g. gender, bar attendance).
+
+## Background
+
+- This work expands upon the original 2004 analysis by applying exponential random graph modeling (ERGM) to the network in order to quantify the effect of various attributes of the network (e.g. gender, bar attendance), as well as looking at other less common measures of network centrality to quantify the effect of an individuals' position in the network on the outbreak.
 
 ## Background
 
 - Gonorrhea is a sexually transmitted disease/infection (STD/STI) which can be transmitted orally, vaginally or anally. 
-- According to the Centers for Disease Control and Prevention, about 1 in 5 people in the United States have a STI, totalling nearly 68 million infections in 2018.
-- Of the 26 million new infections in 2018, it is estimated about 1.6 million of them were gonorrhea. 
 - Although it can have many serious side effects, it can also be symptomless, leading to individuals unknowingly infecting their partners. 
+- When untreated, it also makes HIV more susceptible to transmission, making gonorrhea itself a risk factor for the propagation of HIV.
+- To this day, gonorrhea is the second most commonly reported STD in Canada.
 
 ## Background
 
-- Although the adjacency matrix for the data allowed us to analyze the network as a directed network, we thought it prudent to symmetrize the matrix (as was done in P De et al.)   
-- 2 of the datapoints were missing information regarding their gender so we dropped them from the dataset. They both had a degree of 1 so it wasn't thought that their exclusion would be impactful. This left 46 males and 46 females in the network.
+- As of 2016, approximately 7% of Albertans identify as First Nations, compared to approximately 5% throughout all of Canada.
+- First Nations peoples experience a disproportionate prevalence of STDs in their population relative to other groups in Canada.
+- Cultural factors are acknowledged by Doherty, et al. (2001) as meaningful in the formation of social networks, particularly sexual ones, and likewise cultural differences have prevented the osmosis of responsible sexual health practices in regions predominantly occupied by First Nations. 
+
 
 ## Background
 
-- Data on sexual networks can be collected either egocentrically or sociometrically. 
-- In the former case, the method involves interviewing the ego, and getting information regarding their alters (sexual partners) without in turn contacting their alters. 
+- Patients included in the 2001 study were asked for consent for their enrollment in the study.
+- Questions about sexual risk factors and drug use were omitted from the survey after a high proportion of respondents opted not to answer it. 
+- Since STD clinical reports don't contain _complete_ sexual contact information, the original index case could not be identified.
+- It was found in 2001 that certain individuals acquired their respective infections from partners whom they met outside of their own local community. 
 
+## Background
 
-# On studying sexual networks 
+- As is typical for data collection processes in which information is nominated by the ego, and especially in the sensitive case where sexual partnering is involved, there is bound to be some information missing from the data.
+- e.g. Self-reported behavior from an ego may not necessarily reflect their practices in reality.
+- The asymptomatic of some gonorrhea infections also implies that the network of disease transmission is potentially far greater than what is observed here. 
+
 
 ## The connected network with the bar as a node
 
@@ -193,16 +206,6 @@ gonnet_df %>%
 - Note that the distribution in number of partners is more right skewed for women than it is for men, owing to the fact that about a third of more women in this network had 1 partner compared to men who had 1 partner. 
 - Generally men's number of partners is more spread between 1-2 partners. 
 - The distribution is similar for both genders when looking at those having more than 2 partners. 
-
-
-## Methods
-
-- Degree Centrality
-- Eigenvector Centrality
-- Katz Centrality
-- Average Distance
-- Exponential Random Graph Model (ERGM)
-
 
 ## Exponential Random Graph Model (ERGM)
 
@@ -351,28 +354,57 @@ LRT <- lrtest$Chisq[2]
 
 # randomly sampling from a chi-squared distribution with 1 df
 chisq_plot_df <- data.frame(values = rchisq(1000, df = 1))
- 
-ggplot(chisq_plot_df, aes(x = values)) +
-    geom_density(size = 1) +
-    geom_vline(xintercept = LRT, linetype = "dashed", colour = "red") +
-    ggtitle(expression(chi[2]), "distribution with 1 degree of freedom")
+
+# critical value, if LRT > critical value, reject H0
+critical_value <- qchisq(p = 0.05, df = 1, lower.tail = F)
+
+# plotting the distribution with shaded rejection region
+ggplot(chisq_plot_df, aes(x = values, ymin = 0, ymax = 1)) +
+    geom_density() +
+    geom_vline(xintercept = LRT, linetype = "dashed", colour = "blue",
+              show.legend = T) +
+    geom_vline(xintercept = critical_value, linetype = "solid", colour = "red",
+              show.legend = T) +
+    ggtitle("Chi-squared distribution with 1 degree of freedom") +
+    scale_linetype_discrete(labels = c("95% critical value", 
+                                      "LRT test statistic")) +
+    ylab("Density") +                                
+    theme_bw() +
+    ylim(c(0,1))
 ```
 
-
-
 ## Markov Chain Monte Carlo (MCMC)
-- 
+- A Markov Chain is a stochastic process that goes from one state to another, with the future state $X_{t+1}$ depending only on the current state $X_t$ at time $t$.
+- $\Pr(X_{t+1} = x | X_t = x_t)$
+- A Monte Carlo process refers to a simulation that samples many random values from a posterior distribution of interest. 
+- Hence a Markov Chain Monte Carlo (MCMC) simulation is a simulation of a random process whose future value depends only on the current value.
 
+## Metropolis-Hastings Algorithm
+- A common MCMC algorithm is the Metropolis-Hastings algorithm, in which the process "randomly walks" starting from some $\theta_0$.
+- To determine whether the process advances, a "candidate value" $\theta\*$ is generated by sampling from the proposal distribution $g(\theta\*| \theta_{s-1})$ at iteration $s$.
+- We then derive the Metropolis-Hastings acceptance ratio $\eta$, which is a ratio of the estimated distribution at time $\theta$ and at the proposed time $\theta_n$. 
+- We look at the smaller value between the acceptance ratio $\eta$ and 1, which is designated as the acceptance probability $\rho$, i.e. $\rho = \text{min}(1, \eta)$
+- We sample $U \sim \text{Uni}(0,1)$ to $\rho$. If $U < \rho$ then we accept the candidate value such that $\theta_s = \theta\*$
+- Otherwise we repeat another iteration with $\theta_s$ as before. 
 
-## Model Diagnostics
+## MCMC Diagnostics
+- When using MCMC chains our goal is for it to _converge_. 
+- We can diagnose this by looking at traceplots of the MCMC chain as well as the density curve. 
+
+## MCMC Diagnostics
+```{r mcmc-diagnostics, echo = F}
+
+library(coda)
+mcmc.diagnostics(ergm_model8, which = "plots")
+```
+
+## Goodness of Fit
 
 ```{r model-diagnostics}
 summary(ergm_model8)
 model8_gof <- gof(ergm_model8, GOF = ~ model)
 # goodness of fit for model statistics
 model8_gof$pval.model
-
-
 ```
 
 ## Plotting Goodness of Fit
@@ -381,9 +413,28 @@ model8_gof$pval.model
 plot(model8_gof)
 ```
 
-## MCMC Diagnostics
-```{r mcmc-diagnostics, echo = F}
-mcmc.diagnostics(ergm_model8)
-```
+## Model Interpretation (Homophily)
 
-## Model Interpretation
+- 
+
+## Discussion
+
+- This work emphasizes the importance of 
+
+## Remaining Work 
+
+- Centrality measures e.g. eigenvector centrality, Katz centrality
+- What other data is missing from this dataset that would help us answer more questions?
+- Suggestions?
+
+## References
+
+De P, Singh AE, Wong T, et al. 2004. "Sexual network analysis of a gonorrhea     outbreak." *Sexually Transmitted Infections* 80:280-285.
+
+Carrington, P. and Scott, J., 2011. *The SAGE handbook of social network          analysis. 1st ed.* Los Angeles [etc.]: SAGE Publications, pp.484-500.
+
+Irene A. Doherty, Nancy S. Padian, Cameron Marlow, Sevgi O. Aral, Determinants and Consequences of Sexual Networks as They Affect the Spread of Sexually Transmitted Infections, The Journal of Infectious Diseases, Volume 191, Issue Supplement_1, February 2005, Pages S42–S54, https://doi.org/10.1086/425277
+
+Wasserman, S. and Faust, K., 1994. Social network analysis: methods and applications. Cambridge: Cambridge University Press.
+
+DE, PRITHWISH MHSc*; SINGH, AMEETA E. BMBS, MSc, FRCPC†; WONG, TOM MD, MPH, FRCPC*; YACOUB, WADIEH MBBCh, MSc, FRCPC‡ Outbreak of Neisseria gonorrhoeae in Northern Alberta, Canada, Sexually Transmitted Diseases: June 2003 - Volume 30 - Issue 6 - p 497-501 
