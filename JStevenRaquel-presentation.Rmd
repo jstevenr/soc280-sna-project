@@ -150,7 +150,8 @@ network::set.edge.attribute(gonnet_net_bar, "lty",
 
 ## Data Collection
 
-- The original study followed an _egocentric_ social network desing in which individuals provided inforamtion on themselves and others within their social networks, who are referred to as alters (Valente)
+- The original study followed an _egocentric_ social network design in which individuals provided information on themselves and others within their social networks (alters).
+- Sexual networks can be more difficult to collect data on sociometrically since it would require having access to the entire sexual network, which is unrealistic. 
 
 ## Data Collection
 
@@ -447,30 +448,57 @@ plot(model8_gof)
 ## The Final Model
 
 ```{r model-interpretation}
-ergm_model8 %>% summary()
+ergm_model8
 ```
 
 ## The Final Model's Effects
 
 - Degree
-- Gender (F-M)
-- Gender (M-M)
-- Bar (Y-Y)
+- Nodemix (Gender)
+- Nodematch (Bar)
 
 ## The Final Model's Equation
 
 - Recall the equation for the ERGM model
 - $\log \big[ \frac{\Pr(Y_{ij} = 1 | y_{ij}^C)}{\Pr(Y_{ij} = 0 | y_{ij}^C)}  \big] = \sum_{A(Y_{ij}) \eta_A d_A(y)}$
-- $$
+- $\log \big[ \frac{\Pr(Y_{ij} = 1 | y_{ij}^C)}{\Pr(Y_{ij} = 0 | y_{ij}^C)}  \big] = -5.1948 + 2.7430 \text{Degree}_1 + 1.4678 \text{Degree}_2 + (3.4534 \times \text{Gender}_{FM}) + (1.7138 \times \text{Gender}_{MM}) + (-0.7061 \times \text{Bar})$
+
+```{r tie, include = F}
+
+get_prob_from_logit <- function(eta) {
+  odds <- exp(eta)
+  prob <- odds/(1+ odds)
+  return(prob)
+}
 
 
-
+mcmc_coef <- c(edges = -5.1948, 
+               degree1 = 2.7430, 
+               degree2 = 1.4678, 
+               mix_genderFM = 3.4534, 
+               mix_genderMM = 1.7138, 
+               match_bar = -0.7061)
+```
 
 ## Degree
 
 - This comprises 2 effects, each for the number of nodes in the network with degrees of 1 and 2 respectively. 
-- MCMC estimate for `degree1`: $\approx 2.4759$, implying that all else equal, a node having a degree of 1 increases its odds of having a tie by $\exp(2.4759) \approx 11.892$
-- MCMC estimate for `degree2`: $\approx 1.471$
+- $\eta_2 \approx 2.7430$
+- $\eta_3 \approx 1.4678$
+
+## Gender
+
+- We used the `nodemix` effect in the ERGM which tests the effects of mixing and matching across the levels of gender, M and F. 
+- F-F is the reference class for this effect (note that there was only one F-F case in the dataset).
+- $\eta_4 \approx 3.4534$
+- $\eta_5 \approx 1.7138$
+
+
+## Bar
+
+- $\eta_6 \approx -0.7061$
+
+
 
 ## Remaining Work 
 
