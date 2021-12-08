@@ -403,10 +403,7 @@ ggplot(chisq_plot_df, aes(x = values, ymin = 0, ymax = 1)) +
 
 ## Markov Chain Monte Carlo (MCMC)
 
-- A Markov Chain is a stochastic process that goes from one state to another, with the future state $X_{t+1}$ depending only on the current state $X_t$ at time $t$.
-- $\Pr(X_{t+1} = x | X_t = x_t)$
-- A Monte Carlo process refers to a simulation that samples many random values from a posterior distribution of interest. 
-- Hence a Markov Chain Monte Carlo (MCMC) simulation is a simulation of a random process whose future value depends only on the current value.
+
 
 ## Metropolis-Hastings Algorithm
 
