@@ -67,6 +67,8 @@ The contact tracing of sexual partners is relegated to those who have a positive
 
 This dataset, constructed in the form of an adjacency matrix, contains 89 nodes, one of which is the "event" of attending a bar (i.e. when a node has a tie with this bar node, it means they attend the bar). Two of these nodes (denoted by `x` and `x2`) are missing information about their gender which is otherwise indicated by an `m` or `f` in the label of the respective node, followed by a number with which to differentiate them. These nodes with missing data were dropped on account of their missing information and it is thought that their exclusion is mostly inconsequential on account of their both having only one tie. 
 
+While the data was originally directed in its original form, we opted to symmetrize it, since this makes more sense in the context of a sexual network in which a nomination should always theoretically be reciprocated.
+
 \singlespacing
 
 ## Methods
@@ -226,11 +228,7 @@ For an undirected network such as this, then the degree of some node $i$ is just
 
 $$D_i = \sum_j a_{ij}$$
 
-where $j$ is the number of nodes in the network and $a_{ij} = 1$ given that node $i$ has a tie with node $j$, and zero otherwise. 
-
-As noted earlier in the figure with the disconnected graph, the largest component contains 2 nodes (`m017` and `f011`) with degrees of 6 and 7 respectively. Noting their respective positions in the network, we see that a high degree centrality doesn't necessarily imply a large impact on the network in general, as long as an ego's alters do not themselves have a high degree centrality. The converse is also true where an ego can have a small degree but still be connected to an alter than itself has a high degree, e.g. `f014` was a bar attendee with a degree of one, connecting itself to `m208` who accordingly has 4 other alters, some of whom have more among them. 
-
-It's possible in fact for an ego to have a high degree but whose alters themselves have a very low degree, such that their respective sub-component is not very large, e.g. `f004` which has an degree of 5, but all of its alters have a degree of only 1 or 2. In this literature "degree" will be used interchangably with "number of (sexual) partners" as these are the same thing in this context.
+where $j$ is the number of nodes in the network and $a_{ij} = 1$ given that node $i$ has a tie with node $j$, and zero otherwise. In this paper "degree" will be used interchangably with "number of (sexual) partners" as these are the same thing in this context.
 
 ```{r table-male-female-degree, echo = F, fig.cap = "Table comparing the degree of men and women."}
 gonnet_nobar_df %>% 
@@ -252,7 +250,6 @@ gonnet_df %>%
 ```
 
 We further observe that those who attend the bar end up having an average of about 1.6 sexual partners compared to as many as 2.1 partners from those who did. Again, these two quantities are technically dependent (owing to the fact that these are not isolated samples, i.e. the bar attendees can be partnered with the non-attendees), so we can't formally compare them with a t-test.
-
 
 #### Eigenvector Centrality
 
@@ -447,7 +444,7 @@ plot(model8_gof, "model statistics")
 
 The `gof()` function for goodness of fit tests several different aspects of the network, namely degree, edgewise shared partners, and geodesic distances. Each of these illustrates the distribution of the network at a different level: node, edge, and dyad, respectively. 
 
-The function works by simulating simular networks based on the fitted ERGM model, and observes their respective distributions and how the true values of the observed network compared to it.  As we can see, the true values of the model statistics fall squarely in the middle of the estimates drawn by the boxplots of the simulations. We also see that degree of 1 and 2 are well represented in the networks, in fact one might notice that this distribution is remarkably close to that of the histogram of the degree distribution formulated earlier in this paper. Edgewise shared partners (triangles) were not something commonly observed in this dataset, and this plot corroborates that. Finally, geodesic distances were fairly low among connected nodes and a large proportion of the nodes were themselves isolated from the majority of the other nodes because they were part of an isolated subcomponent. 
+The function works by simulating simular networks based on the fitted ERGM model, and observes their respective distributions and how the true values of the observed network compared to it. As we can see, the true values of the model statistics fall squarely in the middle of the estimates drawn by the boxplots of the simulations. We also see that degree of 1 and 2 are well represented in the networks, in fact one might notice that this distribution is remarkably close to that of the histogram of the degree distribution formulated earlier in this paper. Edgewise shared partners (triangles) were not something commonly observed in this dataset, and this plot corroborates that. Finally, geodesic distances were fairly low among connected nodes and a large proportion of the nodes were themselves isolated from the majority of the other nodes because they were part of an isolated subcomponent. 
 
 Overall we find that the goodness of fit for this ERGM model is satisfactory, so we can proceed to model diagnostics, particularly the diagnostics of the respective MCMC chains.
 
@@ -499,16 +496,15 @@ data.frame(mcmc_est %>% round(3), MLE_est %>% round(3)) %>%
 
 ```{r exp, include = F}
 exp(mcmc_est)
-logit_to_prob(mcmc_est)
 ```
 
 These interpretations are based on the MCMC estimates.
 
 The terms denoted by the `degree()` component of the ERGM formula help us see whether the structure of the network can be explained by degree distribution. 
 
-* $d_2(y) \approx 2.749$, for `degree1`, implies that the odds of a tie forming between two nodes of degree 1 changes multiplicatively by $\exp(2.758) \approx 15.652, all other things equal.
+* $d_2(y) \approx 2.749$, for `degree1`, implies that the odds of a node having degree 1 in a network such as this is $\exp(2.758) \approx 15.652$, all other things equal.
 
-* $d_3(y) \approx 1.464$ for `degree2` implies that the odds of a tie forming between two nodes of degree 2 changes multiplicatively by $\exp(1.484) \approx 4.449$, or over 341%, all other things equal. 
+* $d_3(y) \approx 1.464$ for `degree2` implies that the odds of a node having degree 2 in a network such as this is $\exp(1.484) \approx 4.449$, all other things equal.
 
 * $d_4(y) \approx 3.488$ implies that the odds of a tie forming between two female nodes is about $\exp(-3.488) \approx 0.03$ times lower than that of an M-F tie, all other things equal.
 
@@ -518,7 +514,7 @@ The terms denoted by the `degree()` component of the ERGM formula help us see wh
 
 # Discussion
 
-Our goal in this paper was to determine whether the attributes of gender and bar attendance were meaningful in the formation of ties in this sexual network, and quantifying these relationships using a model created under the exponential random graph model (ERGM) framework. We were able to create a model using Markov Chain Monte Carlo techniques, to achieve this. Ultimately we found that degree (number of partners) does well to explain the structure of the network, and that the attendance of a common venue has some influence on the propagation of the STI in the network as well. 
+Our goal in this paper was to determine whether the attributes of gender and bar attendance were meaningful in the formation of ties in this sexual network, and quantifying these relationships using a model created under the exponential random graph model (ERGM) framework. We were able to create a model using Markov Chain Monte Carlo techniques, to achieve this. Ultimately we found that degree (number of partners) does well to explain the structure of the network, and that the attendance of a common venue has some influence on the propagation of the STI in the network as well. We also talked about different measures of network centrality in the disconnected graph (degree centrality, eigenvector centrality) and how they can be used to quantify one's impact on the network. It is noted that degree centrality in particular is short-sighted and that the _correlation_ between centrality measures brings light to how one's impact in the network may not necessarily scale linearly with the number of one's partners. 
 
 ## Remaining Questions
 
@@ -575,9 +571,6 @@ Wasserman, S. and Faust, K., 1994. Social network analysis: methods and applicat
 \newpage
 
 # Appendix
-
-
-
 
 ```{r get-labels, echo = F}
 labs <- knitr::all_labels()
