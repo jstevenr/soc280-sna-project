@@ -1,6 +1,6 @@
 ---
-title: "Analyzing centralitty measures for a sexual network of gonorrhea transmission"
-subtitle: "SOC 280 Fall 2021"
+title: "Formulating exponential random graph models for a gonorrhea outbreak in a First Nations indigenous community in Alberta, Canada"
+subtitle: "UC Irvine Sociology 280 Fall 2021"
 author: "J Steven Raquel"
 
 mainfont: Times New Roman
@@ -22,21 +22,16 @@ fig_height: 4
 knitr::opts_chunk$set(echo = FALSE)
 library(tidyverse)
 library(sna)
+library(network)
 library(igraph)
 library(epimdr) # for gonnet data
-library(CINNA) # for pca_centralities()
-library(car) # for leveneTest()
-library(factoextra) # for nbclust
 library(kableExtra) # nicer tables
 library(knitr) # kable
 library(ergm) # ERGMS
-library(coda)
 library(statnet)
 library(latticeExtra)
 library(GGally) # ggnet2 
-library(foreign)
-library(ergm.userterms)
-library(Matrix)
+library(stargazer)
 source(here::here("functions.R"))
 ```
 
@@ -112,10 +107,6 @@ gonnet_bar <- gonnet
 # creating igraph object
 gonnet_bar_ig <- graph_from_adjacency_matrix(gonnet_bar)
 
-(pc <- proper_centralities(gonnet_bar_ig)) %>% 
-  capture.output() %>%
-  invisible()
-
 degree_bar <- sna::degree(gonnet_bar, gmode = "graph")
 gonnet_df <- data.frame(
   nodes,
@@ -167,7 +158,7 @@ ggnet2(gonnet_net_bar,
        label = T,
        edge.lty = "lty", 
        size = 5,
-       label.size = 5/2)
+       label.size = 4)
 
 ```
 
@@ -179,9 +170,34 @@ While the majority of ties are between individuals of the opposite sex, e.g. mal
 
 The node `m010` is also unique in that it happens to have ties to one female node (`f024`) and one male node (`m018`), the latter of which in turn has a tie with a female node (`f023`). The idea of men who have sex with men (MSM) or women who have sex with women (WSW) acting as bridging nodes between otherwise disparate sexual networks was something considered in the exploratory analysis but there just wasn't enough data to delve deeper into this subject.
 
+```{r sociogram-nobar, echo = F}
+set.seed(62)
+# GGally is loaded
+ggnet2(gonnet_net_nobar, 
+       color = "gender", 
+       palette = c("F" = "#F8766D", "M" = "#00BFC4"), 
+       shape = "bar", 
+       mode = "fruchtermanreingold", 
+       label = T,
+       size = 5,
+       label.size = 4)
+```
+
+There are about 9 or so subcomponents of this graph; notice that the largest among them has 3 bar attendees within it, 2 of whom have at least 5 ties to other individuals. Notice there is one isolate where a male node attended the bar but otherwise has no ties to any other node. There also a a series of smaller sub-components where there is only one edge between two nodes, one of whom is a bar attendee. The largest subcomponent of the graph includes 38 of the 86 nodes in the network, or approximately 44% of all egos. 
+
+#### Serosorting, Monogamy, and Abstinence
+
+_Serosorting_ refers to the practice of choosing a sexual partner assumed to be of the same status of oneself with regard to an STI, although it is mostly used in the context of HIV. It is a possible methodology to stem outbreaks without encouraging individuals explicitly to engage in either abstinence or monogamy, i.e. individuals can remain sexually active with other partners if they so wish. 
+
+Note the presence of a case in the largest subcomponent, in which 6 separate nodes (`f019, m526, f011, m551, f022` and `m206`) are jointly connected through one another such that they can all reach each other in 3 steps or less, through at least two of their alters. This is the only such appearance of a "closed loop" in the entire network.
+
+It does present a situation in which these individuals who are part of the same social network can serosort amongst themselves in order to stem an outbreak before it starts propagating to the rest of the component, whilst maintaining a sexually active lifestyle with more than one person. In a case like this where we don't know the timeline of the sexual encounters, it's possible that any one of these people either has or will get gonorrhea at some point, so they would either have to abstain, commit, or alternatively, form a closed loop such as the one presented here. This assumes that expecting an ego to engage in abstinence or monogamy is unrealistic for them, which may be appropriate considering the context. 
+
+For example, note both `m206` and `m551` of them each have a degree of 2, but their alters (`f019`, `f011`, `f022`) have a high degree. Suppose these latter three could be encouraged only to sleep with the other individuals in this loop, they would still be able to sleep with multiple people, and not spread the STI to others in the community. This is just one alternative to the common recommendations of abstinence or monogamy with respect to STI transmission reduction. 
+
 ### Distribution of ties
 
-```{r figure-gender-degree-histogram, echo=FALSE, warning = F}
+```{r figure-gender-degree-histogram, echo=FALSE, warning = F, fig.height = 3}
 # histogram of degree by gender
 gonnet_nobar_df %>%
   ggplot(aes(x = degree, fill = gender)) +
@@ -204,21 +220,6 @@ Different measures of centrality depend on functions of one of these aspects and
 
 Network centrality was covered in De, at al (2004) but in the context of the connected network, and we want to expand on this by looking at centrality within the disconnected network (which does not contain the bar node).
 
-```{r sociogram-nobar, echo = F}
-set.seed(62)
-# GGally is loaded
-ggnet2(gonnet_net_nobar, 
-       color = "gender", 
-       palette = c("F" = "#F8766D", "M" = "#00BFC4"), 
-       shape = "bar", 
-       mode = "fruchtermanreingold", 
-       label = T,
-       size = 5,
-       label.size = 4)
-```
-
-There are about 9 or so subcomponents of this graph; notice that the largest among them has 3 bar attendees within it, 2 of whom have at least 5 ties to other individuals. Notice there is one isolate where a male node attended the bar but otherwise has no ties to any other node. There also a a series of smaller sub-components where there is only one edge between two nodes, one of whom is a bar attendee. Note the presence of a "6-cycle" in the largest subcomponent, in which 6 separate nodes are jointly connected through one another. This is the only such appearance of a k-cycle in the entire network. The largest subcomponent of the graph includes 38 of the 86 nodes in the network, or approximately 44% of all egos. 
-
 #### Degree Centrality
 
 For an undirected network such as this, then the degree of some node $i$ is just the count of ties it has to other nodes. Supposing we had some adjacency matrix $A$, then the degree of node $i$ is equal to 
@@ -231,18 +232,17 @@ As noted earlier in the figure with the disconnected graph, the largest componen
 
 It's possible in fact for an ego to have a high degree but whose alters themselves have a very low degree, such that their respective sub-component is not very large, e.g. `f004` which has an degree of 5, but all of its alters have a degree of only 1 or 2. In this literature "degree" will be used interchangably with "number of (sexual) partners" as these are the same thing in this context.
 
-```{r table-male-female-degree, echo = F}
-gonnet_df %>% 
-  filter(nodes != "b") %>%
+```{r table-male-female-degree, echo = F, fig.cap = "Table comparing the degree of men and women."}
+gonnet_nobar_df %>% 
   group_by(gender) %>%
-  summarize(average_partners = mean(partners) %>% round(3)) %>% 
+  summarize(average_partners = mean(degree) %>% round(3)) %>% 
   kbl(col.names = c("Gender", "Mean Number of Partners")) %>%
   kable_classic()
 ```
 
 We observe from the data that on average, men have a slightly higher number of sexual partners than women in this sample. Note that we cannot compare the mean number of partners via a t-test in this case, because in this case, the two groups influence each others' degree. 
 
-```{r table-bar-degree, echo = F}
+```{r table-bar-degree, echo = F, fig.cap = "Table comparing the degree of bar attendees and those who did not attend the bar."}
 gonnet_df %>% 
   filter(nodes != "b") %>%
   group_by(attended_bar) %>%
@@ -258,9 +258,9 @@ We further observe that those who attend the bar end up having an average of abo
 
 Eigenvector centrality is calculated both as a function of a node's degree but also as a function of the degree of the nodes it is connected to. In other words, a node with a high eigenvector centrality is well-connected to nodes that are themselves well-connected. Contextually, an ego in this setting would have a high number of partners who themselves also have a high number of partners.
 
-```{r eigenvector-centrality, echo = F}
+```{r eigenvector-centrality, echo = F, message = F, fig.height = 3}
 eigenvectors <- eigen(gonnet_net_nobar)
-eig <- eigenvectors$vectors[,1] %>% as.numeric()
+eig <- eigenvectors$vectors[,1] %>% as.numeric() %>% abs()
 
 # adding eigenvector centrality as a vertex attribute to the networkr
 network::set.vertex.attribute(gonnet_net_nobar, 'eig', eig)
@@ -274,43 +274,33 @@ ggplot(data = data.frame(nodes = nodes[-1],
       aes(x = degree, y = eig)) +
       geom_point() +
       geom_text(aes(label = nodes), size = 3, nudge_x = 0.25) +
-      ggtitle("Degree Centrality (Number of Partners) vs Eigenvector Centrality") + 
+      ggtitle("Degree Centrality vs Eigenvector Centrality, Disconnected Graph") + 
       stat_smooth(se = F, method = "lm") +
       ylab("Eigenvector Centrality") +
       xlab("Degree Centrality") + theme_bw()
 ```
 
-As we can see, all of the values of eigenvector centrality are at most 0, with the rest negative. There seems to be a negative correlation in general. 
+While there is a positive correlation as one would expect, there are interesting observations that can be made about the difference cross-sections of high-low centrality here. For example, for cases in which there are a high degree centrality, but still have an eigenvector centrality of 0, this implies that while that ego has many alters (partners), but these partners themselves have a degree of 1, e.g. `f004`, `m304`, `m306`. 
+
+This implies that having a high degree centrality is not necessarily itself indicative of having a high impact on the network, as long as that ego's alters have few partners. Going back to the idea around "serosorting" (partnering with individuals of the same status), it's possible that individuals can still be sexually active with multiple partners as long as their respective partners are aware of their status and are deliberately not finding new alters themselves. 
 
 \doublespacing
-
-#### Closeness Centrality
-
-Closeness centrality is calculated as the reciprocal of the sum of the length of shortest paths between the node and all other nodes in the graph. In its normalized form, it is multiplied by the number of nodes in the graph $N$, as seen here
-
-$$C(i) = \frac{1}{\sum_y d(j,i)} \times N$$
-
-where $d(j,i)$ is the distance between nodes $i$ and $j$. 
-
-
-### Cutpoints and bridges
-
-Wasserman and Faust (1994) define "cutpoints" and "bridges" as nodes and ties respectively that cause the graph in which they are contained to have less components if they were to be taken out from the graph. In other words, they are the nodes or ties that connect what would be otherwise unconnected sub-graphs. These are crucial in sexual network analysis because these nodes and ties are the difference between whether a certain network may propagate an STI outbreak or not.
 
 ### Exponential Random Graph Model (ERGM)
 
 Exponential random graph models (ERGMs) are a family of statistical models for social networks that permit inference about prominent patterns in the data, given the presence of other network structures (Carrington and Scott, 2011). For a given set of $n$ actors, an ERGM models an observed network $x$ by assigning a probability to every network of $n$ actors, and the form of such a model is as follows
 
-$$\Pr(X = x) = \frac{1}{k} \exp\{\sum_A \eta_Ag_A(x) \}$$
-where the sum is over all configuration types $A$; 
+$$\log \big[ \frac{\Pr(Y_{ij} = 1 | y_{ij}^C)}{\Pr(Y_{ij} = 0 | y_{ij}^C)}  \big] = \sum_{A(Y_{ij})} \eta_A d_A(y)$$
 
-* $\eta_A$ is a parameter correpsonding to configuration type $A$; 
-* $g_A(x)$ is the _network statistic_ for $A$ and is the number of configurations $A$ observed in $x$
-* $k$ normalizes this to be a proper probability distribution.
+where the sum is over all configuration types $A$. 
+
+* $y_{ij}^C$ = all ties in $y$, excepting $y_{ij}$ 
+* $\eta_A$ is a parameter corresponding to configuration type (effect) $A$; 
+* $d_A(y) = z(y_{ij}^+) - z(y_{ij}^-)$ is the difference score for effect $z$ if the tie between $i$ and $j$ were added
 
 This equation implies that there is a probability distribution of all possible networks with $n$ nodes, with each such network having their own distinct probability.
 
-The ERGM model requires a one-mode network, so we can create one by dropping the bar node from the data (while still retaining the information of bar attendance as a vertex attribute). Many of these models, although not all, were generated with Markov Chain Monte Carlo (MCMC) inference. 
+The ERGM model requires a one-mode network, so we can create one by dropping the bar node from the data while still retaining the information of bar attendance as a vertex attribute. The models were generated using a combination of both maximum likelihood and Markov Chain Monte Carlo (MCMC) via the `ergm` package. We were able to compare these using likelihood ratio tests and the Akaike Information Criterion. Thus, we were able to use frequentist techniques to determine which parameters were ideal to fit, and then ultimately fit this final model using Bayesian inference with MCMC. MCMC and the Metropolis-Hastings algorithm used in this inference are briefly explained in this literature.
 
 #### Markov Chain Monte Carlo (MCMC)
 
@@ -322,22 +312,36 @@ A Monte Carlo process refers to a simulation that samples many random values fro
 
 #### Metropolis-Hastings Algorithm
 
-A common MCMC algorithm is the Metropolis-Hastings algorithm, which is used in the `ergm()` function to get paramter estimates. In this algorithm, the process "randomly walks" starting from some $\theta_0$. To determine whether the process advances, a "candidate value" $\theta\*$ is generated by sampling from the proposal distribution $g(\theta\*| \theta_{s-1})$ at iteration $s$. We then derive the Metropolis-Hastings acceptance ratio $\nu$, which is a ratio of the estimated distribution at time $\theta$ and at the proposed time $\theta_n$. Then we derive the acceptance probability $\rho$ by taking the minimum between the acceptance ratio $\nu$ and 1,  i.e. $\rho = \text{min}(1, \eta)$. We sample $U \sim \text{Uni}(0,1)$ to and compare it to $\rho$. If $U < \rho$ then we accept the candidate value such that $\theta_s = \theta\*$ Otherwise we repeat another iteration with $\theta_s$ as before. After some given number of samples (some of which may be 'thrown out' due to burn-in or thinning), we arrive at some estimate for the parameter, which in this case, would be the estimate for the coefficient $\eta_A$ corresponding to the effect $A$ in the ERGM, where $A$ can be any of the many effects possible for an ERGM model e.g. homo/heterophily.
+A common MCMC algorithm is the Metropolis-Hastings algorithm, which is used in the `ergm()` function to get paramter estimates. In this algorithm, the process "randomly walks" starting from some $\theta_0$. 
+
+* To determine whether the process advances, a "candidate value" $\theta\*$ is generated by sampling from the proposal distribution $g(\theta\*| \theta_{s-1})$ at iteration $s$. 
+* We then derive the Metropolis-Hastings acceptance ratio $\nu$, which is a ratio of the estimated distribution at time $\theta$ and at the proposed time $\theta_n$. 
+* Then we derive the acceptance probability $\rho$ by taking the minimum between the acceptance ratio $\nu$ and 1,  i.e. $\rho = \text{min}(1, \eta)$. 
+* We sample $U \sim \text{Uni}(0,1)$ to and compare it to $\rho$. 
+* If $U < \rho$ then we accept the candidate value such that $\theta_s = \theta\*$ Otherwise we repeat another iteration with $\theta_s$ as before. 
+
+After some given number of samples (some of which may be 'thrown out' due to burn-in or thinning), we arrive at some estimate for the parameter, which in this case, would be the estimate for the coefficient $\eta_A$ corresponding to the effect $A$ in the ERGM, where $A$ can be any of the many effects possible for an ERGM model e.g. homo/heterophily.
 
 ### Model Fitting
 
 Having delineated our techniques for estimating our parameters, we then opted to fit several different ERGM models. When fitting these models, first we started with the simplest model that only models the number of edges (this would be akin to an intercept-only model in logistic regression). We then built several more models which only had one parameter, and then compared the Akaike Information Criteria (AIC) of the models to determine which among these model parameters were worth including. Among the model parameters fit were homophily (`nodematch`), heterophily (`nodemix`) and degree (`degree`).
 
-#### Akaike Information Criterion (AIC)
+#### Akaike Information Criterion (AIC) and Bayesian Information Criterion (BIC)
 
 The Akaike Information Criterion (AIC) is an estimator of out-of-sample prediction error. We use it as a means of model selection, where we generally opt to select the model with the lowest AIC.
 
 $$AIC = -2 \ln(\mathcal{L}) + 2k$$
 
-Where $L$ is the likelihood of the model, and $k$ is the number of parameters.
+Where $\mathcal{L}$ is the likelihood of the model, and $k$ is the number of parameters.
+
+The _Bayesian_ Information Criterion (BIC) is similar to the AIC, but it introduces a penalty term for the number of parameters in the model. This is because a model with more parameters is generally more likely to have a lower AIC than another with less parameters; this prevents us from being as biased towards more complete models. 
+
+$$BIC = \ln(n) k - 2 \ln (\hat{L})$$
+
+where $\hat{L}$ is the maximized value of the likelihood function of the model, $n$ is the number of data points, and $k$ is the number of free paramters to be estimated. 
 
 \singlespacing
-```{r small-ergms, echo = T, cache = T, include = F}
+```{r small-ergms, echo = F, cache = T, include = F}
 # quitely is ran here so not to output all the model building steps
 set.seed(55)
 # library(ergm) is loaded
@@ -346,10 +350,10 @@ ergm_model1 <- quietly(ergm)(gonnet_net_nobar ~ edges)$result
 # homophily
 ergm_model2 <- quietly(ergm)(gonnet_net_nobar ~ edges + nodematch("bar"))$result
 # using symmetric model
-ergm_model3 <- quietly(ergm)(gonnet_net_nobar ~ edges + degree(d = c(1:3)))$result
+ergm_model3 <- quietly(ergm)(gonnet_net_nobar ~ edges + degree(d = c(1:2)))$result
 # heterophily of gender
 ergm_model4 <- quietly(ergm)(gonnet_net_nobar ~ edges + 
-                            nodemix("gender", levels = c("M", "F")))$result
+                            nodemix("gender", base = 2))$result
 # nodefactor
 ergm_model5 <- quietly(ergm)(gonnet_net_nobar ~ edges + nodefactor("bar"))$result
 # heterophily on bar attendance
@@ -360,46 +364,46 @@ ergm_model6 <- quietly(ergm)(gonnet_net_nobar ~ edges + nodemix("bar"))$result
 model_list <- list(ergm_model1, ergm_model2, ergm_model3,
                    ergm_model4, ergm_model5, ergm_model6)
 
-aics <- sapply(model_list, FUN = get_from_summary, object = "aic")
-formulas <- sapply(model_list, FUN = get_from_summary, object = "formula")
+aics <- sapply(model_list, FUN = AIC) %>% unlist()
+formulas <- sapply(model_list, FUN = get_from_summary, object = "formula") %>% unlist()
+bics <- sapply(model_list, FUN = BIC) %>% unlist()
 
-df <- matrix(data = c(formulas, aics),
-              nrow = length(aics),
-              ncol = 2) %>% 
+df_aic_bic <- matrix(data = c(formulas, aics, bics),
+              nrow = length(model_list),
+              ncol = 3) %>% 
   as.data.frame() %>%
-  rename(formula = V1, aic = V2)
+  rename(formula = V1, AIC = V2, BIC = V3)
 
-df %>% 
-  kbl(caption = "Table of Akaike Information Criteria for each ERGM model") %>% 
+df_aic_bic %>% 
+  kbl(caption = "Table of AIC/BIC for each ERGM model") %>% 
   kable_classic()  
-
 ```
+
 \doublespacing
 
-Here we have a table depicting the various AICs for each individual ERGM model. In model selection we start with the most simple intercept model, and then gradually add effects to it. In this case, we notice that among these effects, homophily based on attending the bar (`nodematch("bar")`), degree (`degree(d = c(1:3))`), and homo/heterophily for gender (`nodemix('gender')`) seemed to produce the greatest decreases in AIC. We then proceeded to fit models with these effects. One might notice that homophily based on bar attendance has something of a meager effect on decreasing the AIC. We can fit two models that both include and exclude this effect (a full and a nested model), and compare them with a likelihood ratio test.
+Here we have a table depicting the various AICs/BICs for each individual ERGM model. In model selection we start with the most simple intercept model, and then gradually add effects to it. In this case, we notice that among these effects, homophily based on attending the bar (`nodematch("bar")`), degree (`degree(d = c(1:2))`), and homo/heterophily for gender (`nodemix('gender')`) seemed to produce the greatest decreases in the respective information criteria. We then proceeded to fit models with these effects. One might notice that homophily based on bar attendance has something of a meager effect on decreasing the AIC/BIC. We can fit two models that both include and exclude this effect (a full and a nested model), and compare them with a likelihood ratio test.
  
 \singlespacing
 
 ```{r ergm-model-fitting, echo = T, results = 'hide'}
 set.seed(55)
-
+# quietly is used to suppress output
 ergm_model7 <- quietly(ergm)(gonnet_net_nobar ~ 
                       edges + 
-                      degree(d = c(1:3)) + 
-                      nodemix("gender", levels = c("M", "F")))$result
+                      degree(d = c(1:2)) + 
+                      nodemix("gender", base = 2))$result
 
 
 ergm_model8 <- quietly(ergm)(gonnet_net_nobar ~ 
                       edges + 
-                      degree(d = c(1:3)) + 
-                      nodemix("gender", levels = c("M", "F")) + 
+                      degree(d = c(1:2)) + 
+                      nodemix("gender", base = 2) + 
                       nodematch("bar"))$result
 ```
 
-
 #### Likelihood Ratio Testing for Model Selection
 
-```{r lrtest-curve, echo = F, fig.height = 2.5}
+```{r lrtest-curve, echo = F, fig.height = 3, fig.align = 'center'}
 lrtest <- lmtest::lrtest(ergm_model8, ergm_model7)
 # test statistic
 LRT <- lrtest$Chisq[2]
@@ -433,15 +437,30 @@ The red line in this curve represents the 95% critical value of the distribution
 
 Thus, we conclude that the nested model does _not_ fit the data as well as the full model, and opt to include the `nodematch` term for bar attendance in our final model. 
 
+## Goodness of fit
+
+```{r goodness-of-fit}
+par(mfrow = c(2,2))
+model8_gof <- gof(ergm_model8, gof = ~ model)
+plot(model8_gof, "model statistics")
+```
+
+The `gof()` function for goodness of fit tests several different aspects of the network, namely degree, edgewise shared partners, and geodesic distances. Each of these illustrates the distribution of the network at a different level: node, edge, and dyad, respectively. 
+
+The function works by simulating simular networks based on the fitted ERGM model, and observes their respective distributions and how the true values of the observed network compared to it.  As we can see, the true values of the model statistics fall squarely in the middle of the estimates drawn by the boxplots of the simulations. We also see that degree of 1 and 2 are well represented in the networks, in fact one might notice that this distribution is remarkably close to that of the histogram of the degree distribution formulated earlier in this paper. Edgewise shared partners (triangles) were not something commonly observed in this dataset, and this plot corroborates that. Finally, geodesic distances were fairly low among connected nodes and a large proportion of the nodes were themselves isolated from the majority of the other nodes because they were part of an isolated subcomponent. 
+
+Overall we find that the goodness of fit for this ERGM model is satisfactory, so we can proceed to model diagnostics, particularly the diagnostics of the respective MCMC chains.
+
 ### Model Diagnostics
 
-When using MCMC chains our goal is for it to _converge_. 
-We can diagnose this by looking at traceplots of the MCMC chain as well as the density curve. 
-We want to see the traceplot have constant variance (homoskedascticity) and for the density plot to be centered at 0 and shaped like a bell curve.
+When using MCMC chains for parameter estimation, our goal is for the chains to converge, showing that we have found a reasonable estimate for our respective parameter. We can diagnose this by looking at traceplots of the MCMC chain as well as the density curves. We want to see the traceplot have constant variance (homoskedascticity), oscillating around 0, and for the density plot to be likewise centered at 0 and shaped like a bell curve.
 
-```{r model-diagnostics}
+```{r model-diagnostics, fig.height = 4, results = 'hide'}
+par(mfrow = c(3,2))
 mcmc.diagnostics(ergm_model8, which = "plots")
 ```
+
+Most of the traceplots and density plots given by the MCMC diagnostics show us that the respective MCMC chains have converged, so our model estimates are sound. We do notice that in the case of the estimate for the F-F nodemix term, the distribution deviates somewhat from this, but this could be easily attributed to the lack of F-F ties in the dataset. We would like to comment that with F-F as the reference class with respect to this parameter, the M-F and M-M terms do converge easily--but for the sake of a more meaningful interpretation, we opted to treat M-F ties as baseline here. 
 
 ### Interpretation
 
@@ -449,28 +468,77 @@ mcmc.diagnostics(ergm_model8, which = "plots")
 
 Recall the equation for the ERGM model
 
-$$\log \big[ \frac{\Pr(Y_{ij} = 1 | y_{ij}^C)}{\Pr(Y_{ij} = 0 | y_{ij}^C)}  \big] = \sum_{A(Y_{ij}) \eta_A d_A(y)}$$
+$$\log \big[ \frac{\Pr(Y_{ij} = 1 | y_{ij}^C)}{\Pr(Y_{ij} = 0 | y_{ij}^C)}  \big] = \sum_{A(Y_{ij})} \eta_A d_A(y)$$
 
-Hence we have,
+The coefficients represent the _weight_ of the log-odds of a tie for a 1 unit increase in the effect (or in the case of a categorical variable, its inclusion), with all other effects held constant. A positive weight implies that the probability of a tie increases with the inclusion of that effect, and conversely a negative weight implies that the probability decreases with its inclusion. 
 
-$$\log \big[ \frac{\Pr(Y_{ij} = 1 | y_{ij}^C)}{\Pr(Y_{ij} = 0 | y_{ij}^C)}  \big] = -5.1948 + 2.7430 \text{Degree}_1 + 1.4678 \text{Degree}_2 + (3.4534 \times \text{Gender}_{FM}) + (1.7138 \times \text{Gender}_{MM}) + (-0.7061 \times \text{Bar})$$
+Similar to interpreting logistic regression, we can convert from the log-odds to probability accordingly:
 
-```{r model-interpretation}
-ergm_model8
+$$\begin{aligned}
+\log \big[ \frac{\Pr(Y_{ij} = 1 | y_{ij}^C)}{\Pr(Y_{ij} = 0 | y_{ij}^C)}  \big] & = \eta_1 d_1(y) + \eta_2 d_2(y) + ... + \eta_6 d_6(y) \\
+\frac{\Pr(Y_{ij} = 1 | y_{ij}^C)}{\Pr(Y_{ij} = 0 | y_{ij}^C)} & = \exp(\eta_1 d_1(y) + \eta_2 d_2(y) + ... + \eta_6 d_6(y)) \\
+\frac{\Pr(Y_{ij} = 1 | y_{ij}^C)}{\Pr(Y_{ij} = 0 | y_{ij}^C)} & = \exp(\eta_1 d_1(y)) \times \exp(\eta_2 d_2(y)) \times ... \times \exp(\eta_6 d_6(y))
+\end{aligned}$$
+
+where $\eta_i$ is the $i$ effect (e.g. degree), and $d_i(y)$ is the difference score for the inclusion of the $i$th effect. 
+
+Because of the properties of the exponential function, a single-unit increase in some effect (in the discrete or continuous case), or the inclusion of some effect (in the categorical case) has a _multiplicative_ effect on the odds of a tie forming, given by $\frac{\Pr(Y_{ij} = 1 | y_{ij}^C)}{\Pr(Y_{ij} = 0 | y_{ij}^C)}$, while all other effects are held constant.
+
+```{r model-interpretation, echo = F}
+# The estimates from the MCMC posterior estimation
+MLE_est <- ergm_model8$coefficients
+mcmc_est <- ergm_model8$MCMCtheta
+Covariate <- mcmc_est %>% names()
+
+data.frame(mcmc_est %>% round(3), MLE_est %>% round(3)) %>%
+  kbl(caption = "Coefficient estimates based on both Markov Chain Monte Carlo and Maximum Likelihood Estimation.",
+      col.names = c("MCMC Estimate", "MLE Estimate")
+      ) %>% 
+  kable_classic()
 ```
 
-Note that the MCMC estimates are relatively close to the estimates from Monte Carlo Maximum Likelihood Estimation (MCMLE), of which the `ergm()` function does both. Our interpretations will opt to utilze the estimates from the former. 
+```{r exp, include = F}
+exp(mcmc_est)
+logit_to_prob(mcmc_est)
+```
+
+These interpretations are based on the MCMC estimates.
+
+The terms denoted by the `degree()` component of the ERGM formula help us see whether the structure of the network can be explained by degree distribution. 
+
+* $d_2(y) \approx 2.749$, for `degree1`, implies that the odds of a tie forming between two nodes of degree 1 changes multiplicatively by $\exp(2.758) \approx 15.652, all other things equal.
+
+* $d_3(y) \approx 1.464$ for `degree2` implies that the odds of a tie forming between two nodes of degree 2 changes multiplicatively by $\exp(1.484) \approx 4.449$, or over 341%, all other things equal. 
+
+* $d_4(y) \approx 3.488$ implies that the odds of a tie forming between two female nodes is about $\exp(-3.488) \approx 0.03$ times lower than that of an M-F tie, all other things equal.
+
+* $d_5(y) \approx 1.723$ implies that the odds of a tie forming between two male nodes is about $\exp(-1.723) \approx 0.179$ times lower than that of an M-F tie, all other things equal.
+
+* $d_6(y) \approx -0.688$ implies that the odds of a tie forming between a bar attendee and a non-attendee is about $\exp(-0.688) \approx 0.502$ times lower compared to the odds of two non-attendees forming a tie. 
 
 # Discussion
 
-Our goal in this paper was to determine whether the attributes of gender and bar attendance were meaningful in the formation of ties in this sexual network, and quantifying these relationships using a model created under the exponential random graph model (ERGM) framework. We were able to create a model using Markov Chain Monte Carlo techniques, to achieve this. 
+Our goal in this paper was to determine whether the attributes of gender and bar attendance were meaningful in the formation of ties in this sexual network, and quantifying these relationships using a model created under the exponential random graph model (ERGM) framework. We were able to create a model using Markov Chain Monte Carlo techniques, to achieve this. Ultimately we found that degree (number of partners) does well to explain the structure of the network, and that the attendance of a common venue has some influence on the propagation of the STI in the network as well. 
+
+## Remaining Questions
+
+There are many unanswered questions, owing mostly to the lack of completeness of the data, e.g. how is it that all of the individuals who attended the bar, do not have any ties with one another? It was noted in the 2001 study by De, et al. that questions about sexual risk factors or drug use were ignored and eventually excluded as a result; it could potentially be the case that exceedingly risky behaviors e.g. anonymous unprotected sex, drug use / sharing intravenous needles, etc. could be the unifying attribute that unites these bar attendees together, aside from attendance to the bar itself.
+
+Being that the data was taken from a population of First Nations, it would also be interesting to see the larger network in which First Nations sexually sort with non-First Nations individuals. Cultural factors do play a determining role in sexual network formation, and different cultures often have varying access to information and resources with respect to STIs, so the interplay of the respective racial groups, and the extent to which the information they carry is meaningfully transferred, is another outstanding question. For example, if safe sex is _more normalized_ in non-indigenous populations, is a heterophilic tie between an indigenous person, and a non-indigenous person, more or less likely to follow safe sex practices, e.g. condom usage? 
+
+## Future Applications of ERGMs in STI Epidemiology
 
 In an epidemiological context, these results demonstrate that ERGMs can be applied to a sexual network, including one in which geographical information is a component. There are several different determinants to sexual network formation and a dataset that was more complete with this kind of information, be it demographical (e.g. ethnicity, race, religion, class), or geographical (e.g. city, state), would be able to apply these techniques in a more advanced and critically applicable way. It is crucial that epidemiologists and sociologists delve into techniques that can accurately model sexual behavior, as typical approaches to epidemic modeling, e.g. the SIR model (in which a population is placed into three components based on being either susceptible, infectious, or recovered), are short-sighted with regard their application in STI epidemiology, as their parameterizations make unrealistic assumptions such as "random mixing".
 
 One of the critical advantages that network analysis has over traditional epidemiological approaches in a sexual network context is that it is at least somewhat robust to the missingness of data that is typical of egocentric network designs. While missingness of data can lead to issues such as computational intractibility when estimating parameters, network measures such as degree centrality are fairly robust to these issues (although this varies depending on the metric). Moreover, the flexibility that Markov Chain Monte Carlo brings to otherwise computationally intractable situations is also a benefit. 
 
+Another advantage of ERGMs in particularly with respect to sexual networks is that they are effective in modeling relationships on egocentric data, as long as we have _some_ information on the attributes on the alters, especially with respect to demographics. For example, suppose an individual has anonymous sex with someone else, perhaps through sex work, and as such doesn't know their identity but can still share pertinent information (e.g. their gender, age, ethnicity, etc.) that can be utilized as vertex attributes in the analysis. 
+
 Techniques around intervention can also be devised based on the results of modeling an exponential random graph model. For example, consider our quantification of the effect that attending this local bar has in the area, on the dissemination of an STI in a community. This only quantified the effect of one location, but suppose the dataset contained information on _multiple_ venues of contact, then we would be able to specifically model the effect each individual venue has on the probability of a tie forming, and hence, the odds of an outbreak taking place. From there, public health officials can then strategically determine which among these locations would be the best to actively intervene or extend outreach to. This is especially critical in the case of indigenous communities such as First Nations. 
 
+While encouraging abstinence and monogamy are common responses in public health to STI epidemics, there is still the yet unexplored possibility of encouraging individuals to form closed loops amongst their partners in which they share the same status, and also to share these partners themselves (see the example of the closed loop of 6 nodes earlier in the literature). This can prevent entirely new branches in the sexual network from forming, without expecting egos to abstain from sex completely or to commit to one individual. 
+
+If we were to repeat this analysis on a similar dataset, we probably would have opted to choose a dataset with more features, such that the ERGM methodology could have had more room to work, particularly with respect to parameters like homophily and heterophily. With that said, we leave this analysis as a broad framework to be built upon by future sociologists and epidemiologists to expand the approach to modeling sexual networks and the propagation of STIs such as gonorrhea. 
 
 \newpage
 
@@ -478,28 +546,43 @@ Techniques around intervention can also be devised based on the results of model
 
 # References
 
-De P, Singh AE, Wong T, et al. 2004. "Sexual network analysis of a gonorrhea     outbreak." *Sexually Transmitted Infections* 80:280-285.
+Carrington, P. and Scott, J., 2011. *The SAGE handbook of social network analysis. 1st ed.* Los Angeles [etc.]: SAGE Publications, pp.484-500.
 
-Carrington, P. and Scott, J., 2011. *The SAGE handbook of social network          analysis. 1st ed.* Los Angeles [etc.]: SAGE Publications, pp.484-500.
+De P, Singh AE, Wong T, et al. 2004. "Sexual network analysis of a gonorrhea outbreak." *Sexually Transmitted Infections* 80:280-285.
+
+De, Prithwish M.HSc*; Singh, Ameeta E. BMBS, MSc, FRCPC†; Wong, Tom MD, MPH, FRCPC*; Yacoub, Wadieh MBBCh, MSc, FRCPC‡ "Outbreak of Neisseria gonorrhoeae in Northern Alberta, Canada." Sexually Transmitted Diseases: June 2003 - Volume 30 - Issue 6 - p 497-501. 
+
+Handcock M, Hunter D, Butts C, Goodreau S, Krivitsky P, Morris M (2018). _ergm: Fit,
+Simulate and Diagnose Exponential-Family Models for Networks_. The Statnet Project
+(<URL: http://www.statnet.org>). R package version 3.9.4, <URL:
+https://CRAN.R-project.org/package=ergm>.
+
+Hunter D, Handcock M, Butts C, Goodreau S, Morris M (2008). "ergm: A Package to Fit,
+Simulate and Diagnose Exponential-Family Models for Networks." _Journal of
+Statistical Software_, *24*(3), 1-29.
 
 Irene A. Doherty, Nancy S. Padian, Cameron Marlow, Sevgi O. Aral, Determinants and Consequences of Sexual Networks as They Affect the Spread of Sexually Transmitted Infections, The Journal of Infectious Diseases, Volume 191, Issue Supplement_1, February 2005, Pages S42–S54, https://doi.org/10.1086/425277
 
-Wasserman, S. and Faust, K., 1994. Social network analysis: methods and applications. Cambridge: Cambridge University Press.
-
-DE, PRITHWISH MHSc*; SINGH, AMEETA E. BMBS, MSc, FRCPC†; WONG, TOM MD, MPH, FRCPC*; YACOUB, WADIEH MBBCh, MSc, FRCPC‡ Outbreak of Neisseria gonorrhoeae in Northern Alberta, Canada, Sexually Transmitted Diseases: June 2003 - Volume 30 - Issue 6 - p 497-501 
+Public Health Agency of Canada. Report on sexually transmitted infections in Canada: 2011. Centre for Communicable Diseases and Infection Control, Infectious Disease Prevention and Control Branch, Public Health Agency of Canada; 2014. 2011. http://publications.gc.ca/site/eng/469949/publication.html.
 
 Valente TW. Social networks and health: models, methods, and 
 applications. New York: Oxford University Press, 2010.
 
-Public Health Agency of Canada. Report on sexually transmitted infections in Canada: 2011. Centre for Communicable Diseases and Infection Control, Infectious Disease Prevention and Control Branch, Public Health Agency of Canada; 2014. 2011. http://publications.gc.ca/site/eng/469949/publication.html.
+van der Pol, J. Introduction to Network Modeling Using Exponential Random Graph Models (ERGM): Theory and an Application Using R-Project. Comput Econ 54, 845–875 (2019). https://doi.org/10.1007/s10614-018-9853-2
+
+Wasserman, S. and Faust, K., 1994. Social network analysis: methods and applications. Cambridge: Cambridge University Press.
 
 \newpage
 
 # Appendix
 
 
-```{r goodness-of-fit}
-model8_gof <- gof(ergm_model8, GOF = ~ model)
-# goodness of fit for model statistics
-model8_gof$pval.model
+
+
+```{r get-labels, echo = F}
+labs <- knitr::all_labels()
 ```
+
+```{r ref.label = labs, eval = F, include = T}
+```
+
