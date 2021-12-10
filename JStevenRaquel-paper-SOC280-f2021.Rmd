@@ -43,7 +43,7 @@ Contact tracing for sexually transmitted diseases (STDs) such as gonorrhea, chla
 
 This dataset concerns a localised outbreak of *Neisseria gonorrehoeae* (gonorrhea) in an indigenous First Nations community located in Alberta, Canada. It was originally analyzed in a paper by Prithwish De, et al. (2004), in which they used measures of network centrality (e.g. information centrality) to determine the association between the risk of infection between members of the network and their position within the network itself. The data was sourced from an earlier 2001 study by the same authors (De, et al. 2001) in which they formulated a plan to address the outbreak. 
 
-This analysis looks at measures of centrality (degree centrality, eigenvector centrality) for the disconnected graph, as well as formulating an exponential random graph model (ERGM) for the network so as to create a basis for simulation of disease propagation / sexual networking within an indigenous population. This can allow us to infer the behavior of a minority group and address their unique needs. One of the byproducts of the ERGM model was also to estimate the propensity for homosexual ties to form between individuals in this community.
+This analysis looks at measures of centrality (degree centrality, eigenvector centrality) for the disconnected graph, as well as formulating an exponential random graph model (ERGM) for the network so as to create a basis for simulation and inference of disease propagation / sexual networking within an indigenous population. This can allow us to infer the behavior of a minority group and address their unique needs. Moreover, it also allows us to infer the probability of some ego having a certain number of ties, as well as allowing us to estimate the propensity for homosexual ties to form between individuals in this community.
 
 # Background
 
@@ -396,17 +396,17 @@ set.seed(55)
 # quietly is used to suppress output
 ergm_model7 <- quietly(ergm)(gonnet_net_nobar ~ 
                       edges + 
+                      isolates()+
                       degree(d = c(1:2)) + 
-                      nodemix("gender", base = 2) + 
-                      isolates()
+                      nodemix("gender", base = 2)
                       )$result
 
 
 ergm_model8 <- quietly(ergm)(gonnet_net_nobar ~ 
                       edges + 
+                      isolates() +
                       degree(d = c(1:2)) + 
                       nodemix("gender", base = 2) +
-                      isolates() +
                       nodematch("bar")
                       )$result
 ```
@@ -521,25 +521,26 @@ $$p = \frac{\exp(\beta_A)}{1 + \exp(\beta_A)}$$
 
 where $\exp(\beta_1)$ is the conditional odds of a tie forming given a one-unit change in some effect statistic $\beta$ for the effect $A$. 
 
-* $d_1(y) \approx -1.7999$ for edges implies that the probability of a tie in the node is $\frac{\exp(-1.7999)}{1 + \exp(-1.7999)} \approx 0.142$, with all other effects held constant.
+Because edges ($\eta_1$), isolates ($\eta_2$,) degree ($\eta_3, \eta_4$) are functions of ties, we have to interpret the effect their changes have on the (log-)odds in unison.  Namely, changes to degree imply changes to the number of total edges in the network as well as potentially the decreasing of isolates in the network. 
 
-* $d_2(y) \approx 2.658$, for `degree1`, implies that the odds of a tie that creates gives a node 1 edge is $\exp(d_1(y) + d_2(y)) \approx 2.3597$, all other effects equal.
+If we assume that all nodes that a focal node may connect to are all isolates, we can interpret degree's respective "contributions", as well as the other coefficients accordingly.
 
-* $d_3(y) \approx 1.419$ for `degree2` implies that the odds of a tie that gives a node 2 edges is $\exp(d_1(y) + d_3(y)) \approx 0.683$, all other effects equal.
+* For some change in degree from 0 to 1, the log-odds of a tie of any effect would change  by $(d_1(y) - d_2(y) + 2d_3(y))  \approx 3.806$.
 
-* $d_4(y) \approx 3.488$ implies that the odds of a tie forming between two female nodes is about $\exp(-3.563) \approx 0.03$ times lower than that of an M-F tie, all other effects equal.
+* For some change in degree from 1 to 2, the log-odds of a tie of any effect would change  by $(2 d_1(y) - 2 d_2(y) + 4 d_3(y) + d_4(y)) - d_1(y) \approx 9.030737$
 
-* $d_5(y) \approx 1.723$ implies that the odds of a tie forming between two male nodes is about $\exp(-1.691) \approx 0.184$ times lower than that of an M-F tie, all other effects equal.
+* $d_5(y) \approx -3.563$ implies that the odds of a tie forming between two female nodes is about $\exp(-3.563) \approx 0.03$ times lower than that of an M-F tie, all other effects equal.
 
-* $d_6(y) \approx -0.289$ implies that the difference in log-odds of going from isolate to non-isolate is the difference between `isolates` and `edges`: $d_6(y) - d_1(y) \approx -0.289 - (-1.7999) \approx -1.5111$, or a multiplicative change in the odds by $\exp(-1.5112) \approx 0.22$.
+* $d_6(y) \approx 1.691$ implies that the odds of a tie forming between two male nodes is about $\exp(-1.691) \approx 0.184$ times lower than that of an M-F tie, all other effects equal.
 
 * $d_7(y) \approx -0.721$ implies that the odds of a within-group tie for bar forming (i.e. attendees with attendees, or non-attendees with non-attendees) is given by $\exp(-0.721) = 0.486$, all other effects held equal.
+
 
 # Discussion
 
 Our goal in this paper was to determine whether the attributes of gender and bar attendance were meaningful in the formation of ties in this sexual network, and quantifying these relationships using a model created under the exponential random graph model (ERGM) framework. We were able to create a model using Markov Chain Monte Carlo techniques, to achieve this. Ultimately we found that degree (number of partners) does well to explain the structure of the network, and that the attendance of a common venue has some influence on the propagation of the STI in the network as well. We also talked about different measures of network centrality in the disconnected graph (degree centrality, eigenvector centrality) and how they can be used to quantify one's impact on the network. It is noted that degree centrality in particular is short-sighted and that the _correlation_ between centrality measures brings light to how one's impact in the network may not necessarily scale linearly with the number of one's partners. 
 
-The ERGM model gave us a model that defines the structure of the network with regard to degree and number of isolates, and the propensity for ties to form between and across groups e.g. those who attended the bar and also across genders. Furthermore this gives us an estimator for the propensity of homosexual ties to form within the First Nations community which has broader applications for sociology with respect to sexual network formation. It also gives us an estimate of the propensity of links to form between individuals who attend a given venue, which can form the basis for such analysis to be applied to a network with more venues, or indeed other places where individuals meet each other, such as online (e.g. dating apps). 
+The ERGM model gave us a model that defines the structure of the network with regard to degree and number of isolates, and the propensity for ties to form between and across groups e.g. those who attended the bar and also across genders. Furthermore this gives us an estimator for the propensity of homosexual ties to form within the First Nations community which has broader applications for sociology with respect to sexual network formation. It also gives us an estimate of the propensity of links to form between individuals who attend a given venue, which can form the basis for such analysis to be applied to a network with more venues, or indeed other places where individuals meet each other, such as online (e.g. dating apps). Finally, it gives us estimates for the probabilities of a node having a certain number of ties, which can be vital for estimating epidemiological spread. 
 
 ## Remaining Questions
 
